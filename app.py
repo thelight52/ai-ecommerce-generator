@@ -423,6 +423,9 @@ def generate_single_photo(api_key_val, shot_config, base_prompt, neg_prompt, sce
             contents=content_parts,
             config=types.GenerateContentConfig(
                 response_modalities=["IMAGE", "TEXT"],
+                image_config=types.ImageConfig(
+                    image_size="1K",
+                ),
             ),
         )
         image_bytes = None
