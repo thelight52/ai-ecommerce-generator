@@ -127,7 +127,7 @@ with st.sidebar:
     st.markdown("### 🤖 使用模型")
     st.markdown("""
 - **分析 & 文案**：`claude-sonnet-4-6` (Anthropic)
-- **圖片生成**：`gemini-2.0-flash-preview-image-generation` (Google)
+- **圖片生成**：`gemini-2.5-flash-image` (Google)
 """)
     st.caption("Powered by Anthropic Claude + Google Gemini")
 
@@ -334,7 +334,7 @@ else:
                 )
 
                 response = client.models.generate_content(
-                    model="gemini-2.0-flash-preview-image-generation",
+                    model="gemini-2.5-flash-image",
                     contents=generation_prompt,
                     config=types.GenerateContentConfig(
                         response_modalities=["IMAGE", "TEXT"],
