@@ -482,8 +482,13 @@ else:
         help="可補充材質、特色、價格等，讓文案更精準"
     )
 
+    # 判斷是否有實穿照可參考
+    has_model_image = st.session_state.model_image_bytes is not None
+    if not has_model_image:
+        st.info("💡 建議先完成 Step 3 生成實穿照，文案將根據實穿照的場景情境撰寫更精準的內容。")
+
     if st.button("✍️ 生成社群貼文文案", type="primary", use_container_width=False):
-        with st.spinner("Claude 正在撰寫文案…"):
+        with st.spinner("Claude 正在根據實穿照撰寫情境文案…" if has_model_image else "Claude 正在撰寫文案…"):
             try:
                 claude_client = anthropic.Anthropic(api_key=anthropic_key)
 
@@ -493,36 +498,68 @@ else:
                     "English only": "Please write entirely in English including all hashtags.",
                 }[caption_lang]
 
-                extra = f"\n商品特色補充：{product_desc}" if product_desc else ""
+                extra = f"\n- 商品特色補充：{product_desc}" if product_desc else ""
+
+                # 取得 Step 2 的場景與襪子資訊
+                scene_name = st.session_state.selected_scene or "未指定"
+                prompt_en = st.session_state.prompts.get("positive_en", "") if st.session_state.prompts else ""
 
                 caption_prompt = f"""你是一位專業的電商社群媒體文案師，擅長韓系時尚品牌的 Instagram 行銷。
 
-請為以下商品生成一篇高互動率的 Instagram 貼文文案：
-- 商品類型：韓系可愛中筒襪（電商商品）
-- 風格定位：{caption_style}{extra}
+請根據「附圖中的模特兒實穿照」撰寫一篇高互動率的 Instagram 貼文文案。
+文案必須與照片中的場景、氛圍、穿搭情境完全吻合。
+
+【照片場景資訊】
+- 拍攝場景：{scene_name}
+- 照片中的穿搭提示詞：{prompt_en}
+
+【商品與風格】
+- 商品類型：韓系襪子（電商商品）
+- 文案風格：{caption_style}{extra}
 - 語言規範：{lang_instruction}
+
+【撰寫要求】
+1. 仔細觀察附圖中模特兒的姿勢、場景、光線、穿搭搭配
+2. 文案需描述照片中的情境（例如：咖啡廳的午後、室內的慵懶時光等）
+3. 將襪子自然融入穿搭場景的敘事中，不要只是單純介紹商品規格
+4. 讓讀者看到文案就能聯想到照片中的畫面
 
 請依照以下格式輸出，不要加其他說明：
 
 【標題】
-（1行，吸睛有力，可含表情符號）
+（1行，吸睛有力，與照片場景呼應，可含表情符號）
 
 【貼文內容】
-（4～6行，自然口語化，帶出商品亮點，含適量表情符號）
+（4～6行，以照片場景為背景，自然口語化地帶出穿搭情境與商品亮點，含適量表情符號）
 
 【Call to Action】
 （1行，引導互動或購買）
 
 【Hashtags】
-（20～25個，分行整理，涵蓋：商品、穿搭、韓系、季節、品味生活 等主題）
+（20～25個，分行整理，涵蓋：商品、穿搭、韓系、場景情境、季節、品味生活 等主題）
 """
+
+                # 組合訊息內容：如果有實穿照就附上圖片
+                message_content = []
+                if has_model_image:
+                    img_b64 = base64.standard_b64encode(st.session_state.model_image_bytes).decode("utf-8")
+                    message_content.append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": img_b64,
+                        },
+                    })
+                message_content.append({"type": "text", "text": caption_prompt})
+
                 response = claude_client.messages.create(
                     model="claude-sonnet-4-6",
                     max_tokens=2048,
-                    messages=[{"role": "user", "content": caption_prompt}],
+                    messages=[{"role": "user", "content": message_content}],
                 )
                 st.session_state.captions = response.content[0].text
-                st.success("✅ 文案生成完成！")
+                st.success("✅ 文案生成完成！（已參考實穿照場景）" if has_model_image else "✅ 文案生成完成！")
 
             except Exception as e:
                 st.error(f"❌ 文案生成失敗：{e}")
