@@ -242,8 +242,10 @@ else:
         "隱形襪 — 露出腳踝": "no-show socks / invisible socks (ankle exposed)",
     }
     sock_info_en = sock_type_en_map.get(sock_type, "socks")
-    sock_length_info = f", sock tube length approximately {sock_length}" if sock_length else ""
+    sock_length_desc = f", sock tube length approximately {sock_length}" if sock_length else ""
+    sock_length_zh = f"，襪筒長度約 {sock_length}" if sock_length else ""
     scene_desc = scene_options[selected_scene]
+    sock_type_zh = sock_type.split(" — ")[0]
 
     if st.button("🔍 分析圖片並自動產出提示詞", type="primary", use_container_width=False):
         with st.spinner("Claude 正在分析商品圖片，自動生成提示詞…"):
@@ -257,11 +259,15 @@ else:
 
 Analyze this product flat lay image carefully and generate AI image generation prompts for a Korean female model wearing this product.
 
-PRODUCT INFO:
-- Product type: {sock_info_en}{sock_length_info}
+PRODUCT INFO (MUST appear in the generated prompts):
+- Sock type: {sock_info_en}{sock_length_desc}
 - Scene / Background: {scene_desc}
 
 IMPORTANT RULES:
+- The generated positive_en prompt MUST explicitly contain these exact details:
+  1. The sock type: "{sock_info_en}"
+  2. The sock length: "{sock_length if sock_length else 'not specified'}" (include exact measurement if provided)
+  3. The scene description keywords from: "{scene_desc}"
 - Do NOT describe the specific pattern, color, or design details of the product itself (the reference image will be provided separately to the image generation model)
 - Focus on the MODEL SCENE: pose, angle, background, lighting, styling
 - The sock type is "{sock_info_en}" — make sure the pose and camera angle clearly showcase socks at the correct height on the leg
@@ -269,13 +275,12 @@ IMPORTANT RULES:
 - Korean female model aesthetic, slim legs
 - E-commerce commercial quality
 - Slight side angle to showcase the product
-- Incorporate the selected scene/background description into the positive prompt
 - The negative prompt should prevent common AI image generation errors
 
 Return ONLY a valid JSON object (no markdown, no extra text) with this exact structure:
 {{
-  "positive_en": "Korean female model, slim legs, wearing {sock_info_en}, [pose details], lower body shot from waist down, [outfit pairing], {scene_desc}, [lighting], [photography quality]",
-  "positive_zh": "韓系女性模特兒，穿著{sock_type.split(' — ')[0]}，[姿勢細節]，腰部以下畫面，[服裝搭配]，[場景]，[光線]，[攝影質感]",
+  "positive_en": "Korean female model, slim legs, wearing {sock_info_en}{sock_length_desc}, [pose details], lower body shot from waist down, [outfit pairing], {scene_desc}, [lighting], [photography quality]",
+  "positive_zh": "韓系女性模特兒，穿著{sock_type_zh}{sock_length_zh}，[姿勢細節]，腰部以下畫面，[服裝搭配]，[場景]，[光線]，[攝影質感]",
   "negative_en": "full body, face visible, upper body dominant, extra limbs, distorted feet, deformed toes, blurry, low quality, pixelated, watermark, text overlay, logo, jpeg artifacts, overexposed, dark shadows, plastic skin, unrealistic proportions, missing product, duplicate body parts, bad anatomy, extra fingers, nsfw, wrong sock length, barefoot"
 }}"""
 
