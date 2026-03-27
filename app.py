@@ -134,9 +134,11 @@ with st.sidebar:
 # ─────────────────────────────────────────
 # Session State 初始化
 # ─────────────────────────────────────────
-for key in ["prompts", "model_image_bytes", "captions", "upload_mime", "selected_scene"]:
+for key in ["prompts", "model_image_bytes", "model_images", "captions", "upload_mime", "selected_scene"]:
     if key not in st.session_state:
         st.session_state[key] = None
+if "model_images" not in st.session_state or st.session_state.model_images is None:
+    st.session_state.model_images = []
 
 # ─────────────────────────────────────────
 # 主標題
@@ -353,9 +355,33 @@ if st.session_state.prompts:
 st.divider()
 
 # ─────────────────────────────────────────
-# STEP 3：生成模特兒實穿照
+# STEP 3：生成模特兒實穿照（5 張照片組）
 # ─────────────────────────────────────────
-st.markdown('<div class="step-header">Step 3 · 🎨 生成模特兒實穿照</div>', unsafe_allow_html=True)
+st.markdown('<div class="step-header">Step 3 · 🎨 生成模特兒實穿照組（5 張）</div>', unsafe_allow_html=True)
+
+# 5 張照片的拍攝角度定義
+SHOT_CONFIGS = [
+    {
+        "label": "📷 全身照 ①（正面站姿）",
+        "shot_desc": "Full body shot, Korean female model standing naturally, front-facing with slight hip tilt, head to toe visible, model's face partially visible from nose down, elegant standing pose showcasing the complete outfit and socks coordination",
+    },
+    {
+        "label": "📷 全身照 ②（側面走路）",
+        "shot_desc": "Full body shot, Korean female model walking or mid-stride, captured from side angle, head to toe visible, model's face partially visible from nose down, dynamic motion showing how the socks look during movement, natural and candid editorial feel",
+    },
+    {
+        "label": "🦵 下半身特寫 ①（坐姿）",
+        "shot_desc": "Lower body shot from waist down only, model seated on chair or stool with legs crossed, focus on the socks and leg styling, close-up showing fabric texture and pattern detail, no face visible",
+    },
+    {
+        "label": "🦶 腳部特寫 ②（站姿腳部）",
+        "shot_desc": "Close-up shot of feet and lower legs only, model standing on tiptoe or casual stance, camera angle from knee down, detailed view of sock pattern and fit on the feet and ankles, sharp macro-level fabric texture",
+    },
+    {
+        "label": "🦵 下半身特寫 ③（生活情境）",
+        "shot_desc": "Lower body lifestyle shot from waist down, model in relaxed casual pose like sitting on floor or leaning against wall, socks clearly visible as the hero of the composition, cozy and relatable everyday moment",
+    },
+]
 
 if not st.session_state.prompts:
     st.info("請先完成 Step 2 產出提示詞")
@@ -366,44 +392,61 @@ else:
     if st.session_state.selected_scene:
         st.info(f"🏠 使用場景：**{st.session_state.selected_scene}**（可在 Step 2 更換）")
 
-    if st.button("🎨 生成模特兒實穿照", type="primary", use_container_width=False):
-        with st.spinner("Nano Banana 2 正在生成圖片，約需 30～60 秒…"):
+    st.markdown("將一次生成 **5 張連貫的照片組**：2 張全身照 + 3 張腳部 / 下半身特寫")
+
+    if st.button("🎨 生成 5 張模特兒實穿照組", type="primary", use_container_width=False):
+        client = genai.Client(api_key=api_key)
+
+        # 從 Step 2 取場景描述
+        scene_options_map = {
+            "簡約室內（白色大理石地板）": "sitting on white marble floor, clean minimal indoor background, soft natural window light, warm white tones",
+            "咖啡廳外拍（暖陽散景）": "outdoor cafe setting, warm golden afternoon sunlight, blurred bokeh background, film photography aesthetic",
+            "清爽白背景（電商主圖）": "pure white studio background, soft diffused studio lighting, bright and airy atmosphere, e-commerce hero shot",
+        }
+        scene_desc = scene_options_map.get(
+            st.session_state.selected_scene or "清爽白背景（電商主圖）",
+            "pure white studio background, soft diffused studio lighting"
+        )
+
+        base_prompt = st.session_state.prompts["positive_en"]
+        neg_prompt = st.session_state.prompts["negative_en"]
+
+        # 準備上傳的原始商品圖片
+        ref_part = None
+        if uploaded_file:
+            img_bytes = uploaded_file.getvalue()
+            mime_type = st.session_state.upload_mime or "image/jpeg"
+            ref_part = types.Part.from_bytes(data=img_bytes, mime_type=mime_type)
+
+        generated_images = []
+        progress_bar = st.progress(0, text="準備生成照片組…")
+
+        for idx, shot in enumerate(SHOT_CONFIGS):
+            progress_bar.progress(
+                (idx) / len(SHOT_CONFIGS),
+                text=f"正在生成 {shot['label']}（{idx+1}/5）…約需 30～60 秒"
+            )
+
+            generation_prompt = (
+                f"Using the sock/stocking design shown in the reference image, "
+                f"generate a photorealistic e-commerce model photo. "
+                f"A Korean female model wearing these exact socks with the same pattern, color, and design. "
+                f"Shot type: {shot['shot_desc']}. "
+                f"Scene: {scene_desc}. "
+                f"Style: {base_prompt}, "
+                f"photorealistic, commercial e-commerce photography, 8K resolution, "
+                f"sharp fabric texture, feminine and elegant, editorial fashion quality. "
+                f"The socks must faithfully reproduce the pattern from the reference image. "
+                f"Maintain visual consistency: same model body type, same outfit styling, same lighting across all shots. "
+                f"Avoid: {neg_prompt}"
+            )
+
+            content_parts = []
+            if ref_part:
+                content_parts.append(ref_part)
+            content_parts.append(generation_prompt)
+
             try:
-                client = genai.Client(api_key=api_key)
-
-                # 從 Step 2 取場景描述
-                scene_options_map = {
-                    "簡約室內（白色大理石地板）": "sitting on white marble floor, clean minimal indoor background, soft natural window light, warm white tones",
-                    "咖啡廳外拍（暖陽散景）": "outdoor cafe setting, warm golden afternoon sunlight, blurred bokeh background, film photography aesthetic",
-                    "清爽白背景（電商主圖）": "pure white studio background, soft diffused studio lighting, bright and airy atmosphere, e-commerce hero shot",
-                }
-                scene_desc = scene_options_map.get(
-                    st.session_state.selected_scene or "清爽白背景（電商主圖）",
-                    "pure white studio background, soft diffused studio lighting"
-                )
-
-                base_prompt = st.session_state.prompts["positive_en"]
-                generation_prompt = (
-                    f"Using the sock/stocking design shown in the reference image, "
-                    f"generate a photorealistic e-commerce model photo: "
-                    f"A model wearing these exact socks with the same pattern, color, and design. "
-                    f"{base_prompt}, {scene_desc}, "
-                    f"photorealistic, commercial e-commerce photography, 8K resolution, "
-                    f"sharp fabric texture, feminine and elegant, editorial fashion quality. "
-                    f"The socks in the generated image must faithfully reproduce the pattern from the reference image. "
-                    f"Avoid: {st.session_state.prompts['negative_en']}"
-                )
-
-                # 組合上傳的商品圖片 + 文字提示詞
-                content_parts = []
-                if uploaded_file:
-                    img_bytes = uploaded_file.getvalue()
-                    mime_type = st.session_state.upload_mime or "image/jpeg"
-                    content_parts.append(
-                        types.Part.from_bytes(data=img_bytes, mime_type=mime_type)
-                    )
-                content_parts.append(generation_prompt)
-
                 response = client.models.generate_content(
                     model="gemini-3.1-flash-image-preview",
                     contents=content_parts,
@@ -419,38 +462,72 @@ else:
                         break
 
                 if image_bytes:
-                    st.session_state.model_image_bytes = image_bytes
-                    st.success("✅ 模特兒實穿照生成成功！")
+                    generated_images.append({"label": shot["label"], "bytes": image_bytes})
                 else:
-                    st.error("❌ 未收到圖片，請確認 API Key 有圖片生成配額，或稍後再試。")
+                    generated_images.append({"label": shot["label"], "bytes": None, "error": "未收到圖片"})
 
             except Exception as e:
-                st.error(f"❌ 生成失敗：{e}")
-                st.markdown(
-                    '<div class="info-box">💡 提示：圖片生成需要付費 API Key（Gemini API 免費層可能不支援 image generation）。'
-                    '請至 <a href="https://aistudio.google.com/apikey" target="_blank">AI Studio</a> 確認您的配額。</div>',
-                    unsafe_allow_html=True,
-                )
+                generated_images.append({"label": shot["label"], "bytes": None, "error": str(e)})
 
-if st.session_state.model_image_bytes:
-    col_gen, col_dl = st.columns([2, 1])
-    with col_gen:
-        gen_img = Image.open(io.BytesIO(st.session_state.model_image_bytes))
-        st.image(gen_img, caption="✨ AI 生成的模特兒實穿照", use_container_width=True)
-    with col_dl:
-        st.markdown("#### ⬇️ 下載圖片")
-        st.download_button(
-            label="💾 下載 PNG",
-            data=st.session_state.model_image_bytes,
-            file_name="model_wearing_photo.png",
-            mime="image/png",
-            use_container_width=True,
-        )
+        progress_bar.progress(1.0, text="✅ 照片組生成完成！")
+        st.session_state.model_images = generated_images
+        # 向下相容：取第一張成功的圖片作為 model_image_bytes（給 Step 4 用）
+        for img in generated_images:
+            if img.get("bytes"):
+                st.session_state.model_image_bytes = img["bytes"]
+                break
+        st.success(f"✅ 成功生成 {sum(1 for i in generated_images if i.get('bytes'))} / 5 張照片！")
+
+# 顯示生成的照片組
+if st.session_state.model_images:
+    st.markdown("### 📸 實穿照片組")
+
+    # 第一行：2 張全身照
+    st.markdown("**👗 全身照**")
+    full_cols = st.columns(2)
+    for idx, img_data in enumerate(st.session_state.model_images[:2]):
+        with full_cols[idx]:
+            if img_data.get("bytes"):
+                gen_img = Image.open(io.BytesIO(img_data["bytes"]))
+                st.image(gen_img, caption=img_data["label"], use_container_width=True)
+                st.download_button(
+                    label=f"💾 下載",
+                    data=img_data["bytes"],
+                    file_name=f"model_fullbody_{idx+1}.png",
+                    mime="image/png",
+                    use_container_width=True,
+                    key=f"dl_full_{idx}",
+                )
+            else:
+                st.error(f"❌ {img_data['label']}：{img_data.get('error', '生成失敗')}")
+
+    # 第二行：3 張特寫
+    st.markdown("**🦶 腳部 / 下半身特寫**")
+    detail_cols = st.columns(3)
+    for idx, img_data in enumerate(st.session_state.model_images[2:5]):
+        with detail_cols[idx]:
+            if img_data.get("bytes"):
+                gen_img = Image.open(io.BytesIO(img_data["bytes"]))
+                st.image(gen_img, caption=img_data["label"], use_container_width=True)
+                st.download_button(
+                    label=f"💾 下載",
+                    data=img_data["bytes"],
+                    file_name=f"model_detail_{idx+1}.png",
+                    mime="image/png",
+                    use_container_width=True,
+                    key=f"dl_detail_{idx}",
+                )
+            else:
+                st.error(f"❌ {img_data['label']}：{img_data.get('error', '生成失敗')}")
+
+    # 一鍵全部下載提示
+    successful = [i for i in st.session_state.model_images if i.get("bytes")]
+    if len(successful) > 1:
         st.markdown("---")
-        st.markdown("**圖片資訊**")
-        gen_img_info = Image.open(io.BytesIO(st.session_state.model_image_bytes))
-        st.markdown(f"- 尺寸：`{gen_img_info.width} × {gen_img_info.height}`")
-        st.markdown(f"- 大小：`{len(st.session_state.model_image_bytes) / 1024:.0f} KB`")
+        st.markdown(f"📊 **圖片資訊**：共 {len(successful)} 張成功")
+        for img_data in successful:
+            img_info = Image.open(io.BytesIO(img_data["bytes"]))
+            st.caption(f"  {img_data['label']}：{img_info.width}×{img_info.height}，{len(img_data['bytes'])/1024:.0f} KB")
 
 st.divider()
 
@@ -482,8 +559,9 @@ else:
         help="可補充材質、特色、價格等，讓文案更精準"
     )
 
-    # 判斷是否有實穿照可參考
-    has_model_image = st.session_state.model_image_bytes is not None
+    # 判斷是否有實穿照可參考（多張或單張）
+    successful_images = [i for i in (st.session_state.model_images or []) if i.get("bytes")]
+    has_model_image = len(successful_images) > 0 or st.session_state.model_image_bytes is not None
     if not has_model_image:
         st.info("💡 建議先完成 Step 3 生成實穿照，文案將根據實穿照的場景情境撰寫更精準的內容。")
 
@@ -539,9 +617,20 @@ else:
 （20～25個，分行整理，涵蓋：商品、穿搭、韓系、場景情境、季節、品味生活 等主題）
 """
 
-                # 組合訊息內容：如果有實穿照就附上圖片
+                # 組合訊息內容：附上所有成功的實穿照（最多 5 張）
                 message_content = []
-                if has_model_image:
+                if successful_images:
+                    for si in successful_images[:5]:
+                        img_b64 = base64.standard_b64encode(si["bytes"]).decode("utf-8")
+                        message_content.append({
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/png",
+                                "data": img_b64,
+                            },
+                        })
+                elif st.session_state.model_image_bytes:
                     img_b64 = base64.standard_b64encode(st.session_state.model_image_bytes).decode("utf-8")
                     message_content.append({
                         "type": "image",
