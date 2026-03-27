@@ -355,6 +355,51 @@ if st.session_state.prompts:
 st.divider()
 
 # ─────────────────────────────────────────
+# 單張圖片生成函式（供批次生成 & 個別重新生成共用）
+# ─────────────────────────────────────────
+def generate_single_photo(api_key_val, shot_config, base_prompt, neg_prompt, scene_desc, ref_part):
+    """生成單張模特兒實穿照，回傳 dict: {label, bytes, error?}"""
+    client = genai.Client(api_key=api_key_val)
+    generation_prompt = (
+        f"Using the sock/stocking design shown in the reference image, "
+        f"generate a photorealistic e-commerce model photo. "
+        f"A Korean female model wearing these exact socks with the same pattern, color, and design. "
+        f"Shot type: {shot_config['shot_desc']}. "
+        f"Scene: {scene_desc}. "
+        f"Style: {base_prompt}, "
+        f"photorealistic, commercial e-commerce photography, 8K resolution, "
+        f"sharp fabric texture, feminine and elegant, editorial fashion quality. "
+        f"The socks must faithfully reproduce the pattern from the reference image. "
+        f"Maintain visual consistency: same model body type, same outfit styling, same lighting across all shots. "
+        f"Avoid: {neg_prompt}"
+    )
+
+    content_parts = []
+    if ref_part:
+        content_parts.append(ref_part)
+    content_parts.append(generation_prompt)
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-3.1-flash-image-preview",
+            contents=content_parts,
+            config=types.GenerateContentConfig(
+                response_modalities=["IMAGE", "TEXT"],
+            ),
+        )
+        image_bytes = None
+        for part in response.candidates[0].content.parts:
+            if hasattr(part, "inline_data") and part.inline_data:
+                image_bytes = part.inline_data.data
+                break
+        if image_bytes:
+            return {"label": shot_config["label"], "bytes": image_bytes}
+        else:
+            return {"label": shot_config["label"], "bytes": None, "error": "未收到圖片"}
+    except Exception as e:
+        return {"label": shot_config["label"], "bytes": None, "error": str(e)}
+
+# ─────────────────────────────────────────
 # STEP 3：生成模特兒實穿照（5 張照片組）
 # ─────────────────────────────────────────
 st.markdown('<div class="step-header">Step 3 · 🎨 生成模特兒實穿照組（5 張）</div>', unsafe_allow_html=True)
@@ -426,48 +471,8 @@ else:
                 (idx) / len(SHOT_CONFIGS),
                 text=f"正在生成 {shot['label']}（{idx+1}/5）…約需 30～60 秒"
             )
-
-            generation_prompt = (
-                f"Using the sock/stocking design shown in the reference image, "
-                f"generate a photorealistic e-commerce model photo. "
-                f"A Korean female model wearing these exact socks with the same pattern, color, and design. "
-                f"Shot type: {shot['shot_desc']}. "
-                f"Scene: {scene_desc}. "
-                f"Style: {base_prompt}, "
-                f"photorealistic, commercial e-commerce photography, 8K resolution, "
-                f"sharp fabric texture, feminine and elegant, editorial fashion quality. "
-                f"The socks must faithfully reproduce the pattern from the reference image. "
-                f"Maintain visual consistency: same model body type, same outfit styling, same lighting across all shots. "
-                f"Avoid: {neg_prompt}"
-            )
-
-            content_parts = []
-            if ref_part:
-                content_parts.append(ref_part)
-            content_parts.append(generation_prompt)
-
-            try:
-                response = client.models.generate_content(
-                    model="gemini-3.1-flash-image-preview",
-                    contents=content_parts,
-                    config=types.GenerateContentConfig(
-                        response_modalities=["IMAGE", "TEXT"],
-                    ),
-                )
-
-                image_bytes = None
-                for part in response.candidates[0].content.parts:
-                    if hasattr(part, "inline_data") and part.inline_data:
-                        image_bytes = part.inline_data.data
-                        break
-
-                if image_bytes:
-                    generated_images.append({"label": shot["label"], "bytes": image_bytes})
-                else:
-                    generated_images.append({"label": shot["label"], "bytes": None, "error": "未收到圖片"})
-
-            except Exception as e:
-                generated_images.append({"label": shot["label"], "bytes": None, "error": str(e)})
+            result = generate_single_photo(api_key, shot, base_prompt, neg_prompt, scene_desc, ref_part)
+            generated_images.append(result)
 
         progress_bar.progress(1.0, text="✅ 照片組生成完成！")
         st.session_state.model_images = generated_images
@@ -477,6 +482,48 @@ else:
                 st.session_state.model_image_bytes = img["bytes"]
                 break
         st.success(f"✅ 成功生成 {sum(1 for i in generated_images if i.get('bytes'))} / 5 張照片！")
+
+# ── 個別重新生成處理 ──
+def _get_regen_params():
+    """取得重新生成所需的共用參數"""
+    scene_options_map = {
+        "簡約室內（白色大理石地板）": "sitting on white marble floor, clean minimal indoor background, soft natural window light, warm white tones",
+        "咖啡廳外拍（暖陽散景）": "outdoor cafe setting, warm golden afternoon sunlight, blurred bokeh background, film photography aesthetic",
+        "清爽白背景（電商主圖）": "pure white studio background, soft diffused studio lighting, bright and airy atmosphere, e-commerce hero shot",
+    }
+    sd = scene_options_map.get(
+        st.session_state.selected_scene or "清爽白背景（電商主圖）",
+        "pure white studio background, soft diffused studio lighting"
+    )
+    bp = st.session_state.prompts.get("positive_en", "") if st.session_state.prompts else ""
+    np_ = st.session_state.prompts.get("negative_en", "") if st.session_state.prompts else ""
+    rp = None
+    if uploaded_file:
+        rp = types.Part.from_bytes(
+            data=uploaded_file.getvalue(),
+            mime_type=st.session_state.upload_mime or "image/jpeg"
+        )
+    return bp, np_, sd, rp
+
+# 處理重新生成請求（在顯示之前處理，避免 rerun 問題）
+for regen_idx in range(5):
+    regen_key = f"regen_photo_{regen_idx}"
+    if st.session_state.get(regen_key):
+        st.session_state[regen_key] = False
+        if api_key and st.session_state.prompts and st.session_state.model_images:
+            bp, np_, sd, rp = _get_regen_params()
+            with st.spinner(f"🔄 正在重新生成第 {regen_idx+1} 張照片…"):
+                result = generate_single_photo(api_key, SHOT_CONFIGS[regen_idx], bp, np_, sd, rp)
+                st.session_state.model_images[regen_idx] = result
+                # 更新 model_image_bytes
+                for img in st.session_state.model_images:
+                    if img.get("bytes"):
+                        st.session_state.model_image_bytes = img["bytes"]
+                        break
+            if result.get("bytes"):
+                st.success(f"✅ 第 {regen_idx+1} 張照片重新生成成功！")
+            else:
+                st.error(f"❌ 重新生成失敗：{result.get('error', '未知錯誤')}")
 
 # 顯示生成的照片組
 if st.session_state.model_images:
@@ -490,41 +537,60 @@ if st.session_state.model_images:
             if img_data.get("bytes"):
                 gen_img = Image.open(io.BytesIO(img_data["bytes"]))
                 st.image(gen_img, caption=img_data["label"], use_container_width=True)
-                st.download_button(
-                    label=f"💾 下載",
-                    data=img_data["bytes"],
-                    file_name=f"model_fullbody_{idx+1}.png",
-                    mime="image/png",
-                    use_container_width=True,
-                    key=f"dl_full_{idx}",
-                )
+                btn_col1, btn_col2 = st.columns(2)
+                with btn_col1:
+                    st.download_button(
+                        label="💾 下載",
+                        data=img_data["bytes"],
+                        file_name=f"model_fullbody_{idx+1}.png",
+                        mime="image/png",
+                        use_container_width=True,
+                        key=f"dl_full_{idx}",
+                    )
+                with btn_col2:
+                    if st.button("🔄 重新生成", key=f"btn_regen_full_{idx}", use_container_width=True):
+                        st.session_state[f"regen_photo_{idx}"] = True
+                        st.rerun()
             else:
                 st.error(f"❌ {img_data['label']}：{img_data.get('error', '生成失敗')}")
+                if st.button("🔄 重新生成", key=f"btn_regen_full_err_{idx}", use_container_width=True):
+                    st.session_state[f"regen_photo_{idx}"] = True
+                    st.rerun()
 
     # 第二行：3 張特寫
     st.markdown("**🦶 腳部 / 下半身特寫**")
     detail_cols = st.columns(3)
     for idx, img_data in enumerate(st.session_state.model_images[2:5]):
+        real_idx = idx + 2  # 在 SHOT_CONFIGS 中的實際索引
         with detail_cols[idx]:
             if img_data.get("bytes"):
                 gen_img = Image.open(io.BytesIO(img_data["bytes"]))
                 st.image(gen_img, caption=img_data["label"], use_container_width=True)
-                st.download_button(
-                    label=f"💾 下載",
-                    data=img_data["bytes"],
-                    file_name=f"model_detail_{idx+1}.png",
-                    mime="image/png",
-                    use_container_width=True,
-                    key=f"dl_detail_{idx}",
-                )
+                btn_col1, btn_col2 = st.columns(2)
+                with btn_col1:
+                    st.download_button(
+                        label="💾 下載",
+                        data=img_data["bytes"],
+                        file_name=f"model_detail_{idx+1}.png",
+                        mime="image/png",
+                        use_container_width=True,
+                        key=f"dl_detail_{idx}",
+                    )
+                with btn_col2:
+                    if st.button("🔄 重新生成", key=f"btn_regen_detail_{idx}", use_container_width=True):
+                        st.session_state[f"regen_photo_{real_idx}"] = True
+                        st.rerun()
             else:
                 st.error(f"❌ {img_data['label']}：{img_data.get('error', '生成失敗')}")
+                if st.button("🔄 重新生成", key=f"btn_regen_detail_err_{idx}", use_container_width=True):
+                    st.session_state[f"regen_photo_{real_idx}"] = True
+                    st.rerun()
 
-    # 一鍵全部下載提示
+    # 圖片資訊
     successful = [i for i in st.session_state.model_images if i.get("bytes")]
-    if len(successful) > 1:
+    if successful:
         st.markdown("---")
-        st.markdown(f"📊 **圖片資訊**：共 {len(successful)} 張成功")
+        st.markdown(f"📊 **圖片資訊**：共 {len(successful)} / 5 張成功")
         for img_data in successful:
             img_info = Image.open(io.BytesIO(img_data["bytes"]))
             st.caption(f"  {img_data['label']}：{img_info.width}×{img_info.height}，{len(img_data['bytes'])/1024:.0f} KB")
