@@ -105,7 +105,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 🤖 使用模型")
     st.markdown("""
-- **分析 & 文案**：`gemini-2.5-flash-preview-04-17`
+- **分析 & 文案**：`gemini-1.5-flash`
 - **圖片生成**：`gemini-2.0-flash-preview-image-generation`
 """)
     st.caption("Powered by Google AI Studio")
@@ -212,7 +212,7 @@ Return ONLY a valid JSON object (no markdown, no extra text) with this exact str
 }"""
 
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash-preview-04-17",
+                    model="gemini-1.5-flash",
                     contents=[
                         types.Part.from_bytes(
                             data=img_bytes,
@@ -415,7 +415,7 @@ else:
 （20～25個，分行整理，涵蓋：商品、穿搭、韓系、季節、品味生活 等主題）
 """
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash-preview-04-17",
+                    model="gemini-1.5-flash",
                     contents=caption_prompt,
                 )
                 st.session_state.captions = response.text
