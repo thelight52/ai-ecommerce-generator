@@ -375,11 +375,15 @@ def generate_single_photo(api_key_val, shot_config, base_prompt, neg_prompt, sce
         f"[CONSISTENCY]\n"
         f"The socks must faithfully reproduce the pattern from the reference image. "
         f"Maintain visual consistency: same model body type, same outfit styling, same lighting across all shots.\n\n"
-        f"[ANATOMY REQUIREMENTS]\n"
+        f"[ANATOMY & BODY CONSISTENCY]\n"
+        f"The ENTIRE body must face the same direction — upper body and lower body must be aligned. "
+        f"DO NOT twist the torso so that the chest faces a different direction than the legs. "
         f"Human feet must have exactly 5 toes each, natural proportions, no extra or merged toes. "
         f"Legs must have natural anatomy with proper knee and ankle joints. "
         f"No floating limbs, no extra legs, no distorted body parts.\n\n"
         f"[AVOID]\n"
+        f"twisted torso, body facing different directions, upper body reversed, "
+        f"inconsistent body direction, contorted pose, unnatural twist, "
         f"{neg_prompt}"
     )
 
@@ -418,60 +422,54 @@ SHOT_CONFIGS = [
     {
         "label": "📷 全身照 ①（正面站姿）",
         "shot_desc": (
-            "MANDATORY: Full body photograph showing ENTIRE body from head to shoes. "
-            "The model MUST be STANDING UPRIGHT on both feet, NOT sitting, NOT seated on any chair or surface. "
-            "Front-facing camera angle, slight hip tilt, relaxed arms. "
-            "Face visible from nose down (chin and lips visible, eyes cropped out at top). "
-            "Full outfit coordination clearly visible: top, skirt/shorts, socks, and shoes all in frame. "
-            "The model's full legs and feet must be completely visible touching the ground. "
-            "DO NOT show the model sitting or leaning. She must be standing independently."
+            "FULL BODY photo from head to shoes, showing the ENTIRE person. "
+            "The model is STANDING still on both feet, facing the camera. "
+            "Slight hip tilt, relaxed arms by her side, weight on one leg. "
+            "Head cropped at eye level (chin, lips, jawline visible). "
+            "Complete outfit visible: top, skirt, socks, and shoes all in frame."
         ),
     },
     {
         "label": "📷 全身照 ②（側面走路）",
         "shot_desc": (
-            "MANDATORY: Full body photograph showing ENTIRE body from head to shoes. "
-            "The model MUST be WALKING, captured mid-stride with one foot forward and one foot behind. "
-            "Camera positioned at 90-degree side angle (profile view). NOT sitting, NOT stationary. "
-            "Dynamic walking motion with natural arm swing, legs apart in stride. "
-            "Face visible in profile from nose down. "
-            "Full outfit from head to shoes must be in frame, showing how socks look during movement. "
-            "Candid editorial feel of a model walking through the scene. "
-            "DO NOT show the model sitting, standing still, or posing statically."
+            "FULL BODY photo from head to shoes. "
+            "The model is walking from RIGHT to LEFT, captured mid-step. "
+            "CRITICAL: The ENTIRE body must face the SAME direction (to the LEFT). "
+            "Her chest, hips, knees, and feet ALL point to the LEFT. "
+            "Side profile view, one leg stepping forward, the other pushing off behind. "
+            "Arms swinging naturally matching the walking direction. "
+            "Head turned slightly toward camera showing jawline. "
+            "DO NOT twist the torso. Upper body and lower body MUST face the same direction."
         ),
     },
     {
-        "label": "🦵 下半身特寫 ①（坐姿翹腳）",
+        "label": "🦵 下半身特寫 ①（坐姿）",
         "shot_desc": (
-            "LOWER BODY ONLY from waist down, absolutely NO face, NO upper body above waist. "
-            "Model seated on chair with legs elegantly crossed (one leg over the other). "
-            "Camera at seated eye level, focused on crossed legs and sock details. "
-            "Both socks clearly visible, sharp fabric texture showing pattern and weave detail. "
-            "Feet must have correct human anatomy: exactly 5 toes per foot, natural proportions, no distortion. "
-            "Realistic skin texture on legs, natural shadows between toes."
+            "LOWER BODY ONLY from waist down. NO face, NO chest. "
+            "Model is seated on a chair, legs crossed elegantly. "
+            "Camera at knee height, focused on the crossed legs and socks. "
+            "Both socks clearly visible with sharp fabric texture. "
+            "Natural skin, correct anatomy: 5 toes per foot, no distortion."
         ),
     },
     {
-        "label": "🦶 腳部特寫 ②（站姿腳部微距）",
+        "label": "🦶 腳部特寫 ②（微距）",
         "shot_desc": (
-            "EXTREME CLOSE-UP of feet and ankles ONLY, camera at ground level shooting upward slightly. "
-            "Frame shows ONLY from mid-calf downward, NO knee, NO thigh, NO upper body. "
-            "Model standing with one foot slightly forward, weight on back foot. "
-            "Macro-level detail: individual thread texture of sock fabric, weave pattern, elastic ribbing at top of sock. "
-            "Feet must have correct human anatomy: exactly 5 toes per foot, natural bone structure, realistic skin folds at ankle. "
-            "Sharp focus on sock surface with shallow depth of field blurring the background. "
-            "DO NOT distort feet, DO NOT add extra toes or merge toes together."
+            "CLOSE-UP shot of feet and ankles ONLY, from mid-calf down. "
+            "NO knee, NO thigh visible. Camera at ground level. "
+            "One foot slightly forward, showing sock detail and texture. "
+            "Sharp focus on sock fabric pattern with blurred background. "
+            "Correct foot anatomy: 5 toes, natural bone structure, no deformation."
         ),
     },
     {
         "label": "🦵 下半身特寫 ③（生活情境）",
         "shot_desc": (
-            "LOWER BODY ONLY from waist down, absolutely NO face, NO upper body above waist. "
-            "Lifestyle candid moment: model sitting on floor with legs extended forward, or dangling legs from a ledge, or kneeling casually. "
-            "Socks are the hero of the composition, centered and prominent in the frame. "
-            "Cozy, relatable everyday atmosphere. "
-            "Feet must have correct human anatomy: exactly 5 toes per foot, natural proportions. "
-            "Natural and warm lighting, inviting mood that makes viewer want to own these socks."
+            "LOWER BODY ONLY from waist down. NO face, NO chest. "
+            "Casual lifestyle moment: legs dangling from a ledge, or feet resting on a stool, or stepping on tiptoe. "
+            "Socks are centered and prominent, hero of the composition. "
+            "Cozy, relatable everyday vibe. "
+            "Correct anatomy: 5 toes per foot, natural proportions."
         ),
     },
 ]
