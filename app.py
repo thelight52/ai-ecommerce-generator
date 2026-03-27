@@ -9,6 +9,8 @@ import streamlit as st
 from google import genai
 from google.genai import types
 from PIL import Image
+import anthropic
+import base64
 import io
 import json
 import os
@@ -72,25 +74,44 @@ with st.sidebar:
     st.image("https://ai.google.dev/static/site-assets/images/share.png", width=160)
     st.markdown("## ⚙️ 設定")
 
-    # 優先順序：環境變數 > session_state 快取 > 空白
-    env_key = os.environ.get("GEMINI_API_KEY", "")
+    # Gemini API Key（用於 Step 3 圖片生成）
+    env_gemini = os.environ.get("GEMINI_API_KEY", "")
     if "api_key_cache" not in st.session_state:
-        st.session_state.api_key_cache = env_key
+        st.session_state.api_key_cache = env_gemini
 
     api_key = st.text_input(
-        "Gemini API Key",
+        "Gemini API Key（圖片生成用）",
         type="password",
         value=st.session_state.api_key_cache,
         placeholder="AIzaSy...",
         help="前往 https://aistudio.google.com/apikey 取得免費 API Key"
     )
-
     if api_key:
         st.session_state.api_key_cache = api_key
-        st.markdown('<div class="success-box">✅ API Key 已設定</div>', unsafe_allow_html=True)
+
+    # Anthropic API Key（用於 Step 2 分析 + Step 4 文案）
+    env_anthropic = os.environ.get("ANTHROPIC_API_KEY", "")
+    if "anthropic_key_cache" not in st.session_state:
+        st.session_state.anthropic_key_cache = env_anthropic
+
+    anthropic_key = st.text_input(
+        "Anthropic API Key（Claude 分析 & 文案用）",
+        type="password",
+        value=st.session_state.anthropic_key_cache,
+        placeholder="sk-ant-...",
+        help="前往 https://console.anthropic.com/ 取得 API Key"
+    )
+    if anthropic_key:
+        st.session_state.anthropic_key_cache = anthropic_key
+
+    if api_key and anthropic_key:
+        st.markdown('<div class="success-box">✅ 兩組 API Key 已設定</div>', unsafe_allow_html=True)
     else:
+        missing = []
+        if not api_key: missing.append("Gemini")
+        if not anthropic_key: missing.append("Anthropic")
         st.markdown(
-            '<div class="info-box">👉 請前往 <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a> 取得 API Key</div>',
+            f'<div class="info-box">⚠️ 尚未設定：{", ".join(missing)} API Key</div>',
             unsafe_allow_html=True,
         )
 
@@ -105,10 +126,10 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 🤖 使用模型")
     st.markdown("""
-- **分析 & 文案**：`gemini-1.5-flash`
-- **圖片生成**：`gemini-2.0-flash-preview-image-generation`
+- **分析 & 文案**：`claude-sonnet-4-6` (Anthropic)
+- **圖片生成**：`gemini-2.0-flash-preview-image-generation` (Google)
 """)
-    st.caption("Powered by Google AI Studio")
+    st.caption("Powered by Anthropic Claude + Google Gemini")
 
 # ─────────────────────────────────────────
 # Session State 初始化
@@ -182,14 +203,16 @@ st.markdown('<div class="step-header">Step 2 · 🔍 自動分析並產出提示
 
 if not uploaded_file:
     st.info("請先完成 Step 1 上傳圖片")
-elif not api_key:
-    st.warning("請先在左側 Sidebar 輸入 Gemini API Key")
+elif not anthropic_key:
+    st.warning("請先在左側 Sidebar 輸入 Anthropic API Key")
 else:
     if st.button("🔍 分析圖片並自動產出提示詞", type="primary", use_container_width=False):
-        with st.spinner("Gemini 正在分析商品圖片，自動生成提示詞…"):
+        with st.spinner("Claude 正在分析商品圖片，自動生成提示詞…"):
             try:
-                client = genai.Client(api_key=api_key)
+                claude_client = anthropic.Anthropic(api_key=anthropic_key)
                 img_bytes = uploaded_file.getvalue()
+                img_base64 = base64.standard_b64encode(img_bytes).decode("utf-8")
+                mime_type = st.session_state.upload_mime or "image/jpeg"
 
                 analysis_prompt = """You are a professional e-commerce fashion photographer and AI image prompt engineer specializing in Korean style.
 
@@ -211,18 +234,26 @@ Return ONLY a valid JSON object (no markdown, no extra text) with this exact str
   "negative_en": "full body, face visible, upper body dominant, extra limbs, distorted feet, deformed toes, blurry, low quality, pixelated, watermark, text overlay, logo, jpeg artifacts, overexposed, dark shadows, plastic skin, unrealistic proportions, missing product, duplicate body parts, bad anatomy, extra fingers, nsfw"
 }"""
 
-                response = client.models.generate_content(
-                    model="gemini-1.5-flash",
-                    contents=[
-                        types.Part.from_bytes(
-                            data=img_bytes,
-                            mime_type=st.session_state.upload_mime,
-                        ),
-                        analysis_prompt,
-                    ],
+                response = claude_client.messages.create(
+                    model="claude-sonnet-4-6",
+                    max_tokens=1024,
+                    messages=[{
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": mime_type,
+                                    "data": img_base64,
+                                },
+                            },
+                            {"type": "text", "text": analysis_prompt},
+                        ],
+                    }],
                 )
 
-                text = response.text.strip()
+                text = response.content[0].text.strip()
                 if "```json" in text:
                     text = text.split("```json")[1].split("```")[0].strip()
                 elif "```" in text:
@@ -357,8 +388,8 @@ st.divider()
 # ─────────────────────────────────────────
 st.markdown('<div class="step-header">Step 4 · ✍️ 生成 Instagram 社群貼文文案</div>', unsafe_allow_html=True)
 
-if not api_key:
-    st.warning("請先在左側 Sidebar 輸入 Gemini API Key")
+if not anthropic_key:
+    st.warning("請先在左側 Sidebar 輸入 Anthropic API Key")
 else:
     col_style, col_lang = st.columns(2)
     with col_style:
@@ -381,9 +412,9 @@ else:
     )
 
     if st.button("✍️ 生成社群貼文文案", type="primary", use_container_width=False):
-        with st.spinner("Gemini 正在撰寫文案…"):
+        with st.spinner("Claude 正在撰寫文案…"):
             try:
-                client = genai.Client(api_key=api_key)
+                claude_client = anthropic.Anthropic(api_key=anthropic_key)
 
                 lang_instruction = {
                     "繁體中文": "請全程使用繁體中文（台灣用語）撰寫，包含標題、內文與 hashtag。",
@@ -414,11 +445,12 @@ else:
 【Hashtags】
 （20～25個，分行整理，涵蓋：商品、穿搭、韓系、季節、品味生活 等主題）
 """
-                response = client.models.generate_content(
-                    model="gemini-1.5-flash",
-                    contents=caption_prompt,
+                response = claude_client.messages.create(
+                    model="claude-sonnet-4-6",
+                    max_tokens=2048,
+                    messages=[{"role": "user", "content": caption_prompt}],
                 )
-                st.session_state.captions = response.text
+                st.session_state.captions = response.content[0].text
                 st.success("✅ 文案生成完成！")
 
             except Exception as e:
