@@ -434,6 +434,13 @@ def generate_single_photo(api_key_val, shot_config, base_prompt, neg_prompt, sce
                 image_bytes = part.inline_data.data
                 break
         if image_bytes:
+            # 強制縮放到 1024×1024（API 可能忽略 image_size 參數）
+            img = Image.open(io.BytesIO(image_bytes))
+            if img.width != 1024 or img.height != 1024:
+                img = img.resize((1024, 1024), Image.LANCZOS)
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                image_bytes = buf.getvalue()
             return {"label": shot_config["label"], "bytes": image_bytes}
         else:
             return {"label": shot_config["label"], "bytes": None, "error": "未收到圖片"}
