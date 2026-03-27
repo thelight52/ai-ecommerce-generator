@@ -327,15 +327,29 @@ else:
 
                 base_prompt = st.session_state.prompts["positive_en"]
                 generation_prompt = (
+                    f"Using the sock/stocking design shown in the reference image, "
+                    f"generate a photorealistic e-commerce model photo: "
+                    f"A model wearing these exact socks with the same pattern, color, and design. "
                     f"{base_prompt}, {scene_desc}, "
                     f"photorealistic, commercial e-commerce photography, 8K resolution, "
                     f"sharp fabric texture, feminine and elegant, editorial fashion quality. "
+                    f"The socks in the generated image must faithfully reproduce the pattern from the reference image. "
                     f"Avoid: {st.session_state.prompts['negative_en']}"
                 )
 
+                # 組合上傳的商品圖片 + 文字提示詞
+                content_parts = []
+                if uploaded_file:
+                    img_bytes = uploaded_file.getvalue()
+                    mime_type = st.session_state.upload_mime or "image/jpeg"
+                    content_parts.append(
+                        types.Part.from_bytes(data=img_bytes, mime_type=mime_type)
+                    )
+                content_parts.append(generation_prompt)
+
                 response = client.models.generate_content(
                     model="gemini-2.5-flash-image",
-                    contents=generation_prompt,
+                    contents=content_parts,
                     config=types.GenerateContentConfig(
                         response_modalities=["IMAGE", "TEXT"],
                     ),
