@@ -452,63 +452,118 @@ def generate_single_photo(api_key_val, shot_config, base_prompt, neg_prompt, sce
 # ─────────────────────────────────────────
 st.markdown('<div class="step-header">Step 3 · 🎨 生成模特兒實穿照組（5 張）</div>', unsafe_allow_html=True)
 
-# 5 張照片的拍攝角度定義
-SHOT_CONFIGS = [
+# ── 動作類型池（依拍攝範圍分類） ──
+# 全身照動作池（A / C / D）
+FULLBODY_POSES = [
     {
-        "label": "📷 全身照 ①（正面站姿）",
+        "id": "A", "name": "高處坐姿",
         "shot_desc": (
-            "FULL BODY photo from head to shoes, showing the ENTIRE person. "
-            "The model is STANDING still on both feet, facing the camera. "
-            "Slight hip tilt, relaxed arms by her side, weight on one leg. "
-            "FACE FULLY VISIBLE: show her full face with natural light makeup, gentle smile, looking at camera. "
-            "Korean young woman, long hair, beautiful and natural. "
+            "FULL BODY photo from head to shoes. "
+            "Model sitting on an elevated surface (bench, ledge, slide, or railing), legs dangling or stretched outward. "
+            "Relaxed playful posture, one hand resting on the surface, the other touching hair or holding a prop. "
+            "FACE FULLY VISIBLE: natural light makeup, gentle smile, looking at camera. "
+            "Korean young woman, long hair. Socks and shoes clearly visible on dangling feet. "
             "Complete outfit visible: top, skirt, socks, and shoes all in frame."
         ),
     },
     {
-        "label": "📷 全身照 ②（側面走路）",
+        "id": "C", "name": "站姿俏皮",
         "shot_desc": (
             "FULL BODY photo from head to shoes. "
-            "The model is walking from RIGHT to LEFT, captured mid-step. "
-            "CRITICAL: The ENTIRE body must face the SAME direction (to the LEFT). "
-            "Her chest, hips, knees, and feet ALL point to the LEFT. "
-            "Side profile view, one leg stepping forward, the other pushing off behind. "
-            "Arms swinging naturally matching the walking direction. "
-            "FACE VISIBLE in side profile: showing her jawline, nose, and gentle expression. "
-            "DO NOT twist the torso. Upper body and lower body MUST face the same direction."
+            "Model standing with a playful pose: one foot slightly lifted or on tiptoe, body tilted, "
+            "one hand touching hat/hair or raised cheerfully. Dynamic and youthful energy. "
+            "FACE FULLY VISIBLE: bright smile, looking at camera, natural light makeup. "
+            "Korean young woman, long hair. Complete outfit visible: top, skirt, socks, and shoes."
         ),
     },
     {
-        "label": "🦵 下半身特寫 ①（坐姿）",
+        "id": "D", "name": "躺靠伸腳",
         "shot_desc": (
-            "LOWER BODY ONLY from waist down. NO face, NO chest. "
-            "Model is seated on a chair, legs crossed elegantly. "
-            "Camera at knee height, focused on the crossed legs and socks. "
-            "Both socks clearly visible with sharp fabric texture. "
-            "Natural skin, correct anatomy: 5 toes per foot, no distortion."
+            "FULL BODY photo from head to shoes. "
+            "Model leaning back casually on a railing, bench, or chair, legs stretched forward and slightly raised. "
+            "One hand holding a drink or prop, relaxed happy expression. Socks are prominently displayed on the raised feet. "
+            "FACE FULLY VISIBLE: natural smile, looking at camera or upward. "
+            "Korean young woman, long hair. Complete outfit visible: top, skirt, socks, and shoes."
+        ),
+    },
+]
+
+# 下半身動作池（B / F / H）
+LOWERBODY_POSES = [
+    {
+        "id": "B", "name": "地面坐姿",
+        "shot_desc": (
+            "LOWER BODY ONLY from waist down. NO face, NO chest visible. "
+            "Model sitting on the ground with legs extended forward or one leg bent. "
+            "Camera at low angle, shooting toward the feet. Both socks clearly visible. "
+            "Hands may rest on knees (only hands visible, no arms above elbow). "
+            "Correct anatomy: 5 toes per foot, natural proportions."
         ),
     },
     {
-        "label": "🦶 腳部特寫 ②（微距）",
+        "id": "F", "name": "道具互動",
         "shot_desc": (
-            "CLOSE-UP shot of feet and ankles ONLY, from mid-calf down. "
-            "NO knee, NO thigh visible. Camera at ground level. "
-            "One foot slightly forward, showing sock detail and texture. "
-            "Sharp focus on sock fabric pattern with blurred background. "
-            "Correct foot anatomy: 5 toes, natural bone structure, no deformation."
+            "LOWER BODY ONLY from waist down. NO face, NO chest visible. "
+            "Model's legs and feet with a lifestyle prop nearby: a basketball, coffee cup, tote bag, or book on the ground. "
+            "Casual seated or standing pose, socks are the hero of the composition. "
+            "Prop adds context and visual interest without stealing focus from socks. "
+            "Correct anatomy: 5 toes per foot, natural proportions."
         ),
     },
     {
-        "label": "🦵 下半身特寫 ③（生活情境）",
+        "id": "H", "name": "蹲姿抱膝",
         "shot_desc": (
-            "LOWER BODY ONLY from waist down. NO face, NO chest. "
-            "Casual lifestyle moment: legs dangling from a ledge, or feet resting on a stool, or stepping on tiptoe. "
-            "Socks are centered and prominent, hero of the composition. "
-            "Cozy, relatable everyday vibe. "
+            "LOWER BODY ONLY from waist down. NO face, NO chest visible. "
+            "Model squatting or crouching on a low wall, stone, or curb, arms wrapped around knees (only hands visible). "
+            "Camera at ground level, shooting straight at the feet and socks. "
+            "Socks prominent and centered in composition. "
             "Correct anatomy: 5 toes per foot, natural proportions."
         ),
     },
 ]
+
+# 腳部特寫動作池（E / G）
+FEET_POSES = [
+    {
+        "id": "E", "name": "階梯踩踏",
+        "shot_desc": (
+            "CLOSE-UP of feet and ankles ONLY, from mid-calf down. NO knee, NO thigh. "
+            "Model's feet stepping on stairs or a raised surface, shot from low angle looking upward. "
+            "One foot on a higher step, one on a lower step, showing sock height and detail. "
+            "Sharp focus on sock fabric texture with blurred stairway background. "
+            "Correct foot anatomy: 5 toes, natural bone structure, no deformation."
+        ),
+    },
+    {
+        "id": "G", "name": "雙腳前伸俯拍",
+        "shot_desc": (
+            "CLOSE-UP of feet and lower legs ONLY, shot from ABOVE looking downward (first-person POV). "
+            "Model's legs extended forward on the ground, camera looking down at her own feet. "
+            "Both socks and shoes fully visible, ground texture visible around the feet. "
+            "Sharp focus on sock pattern and color. Casual selfie-style foot shot. "
+            "Correct foot anatomy: 5 toes, natural proportions, no deformation."
+        ),
+    },
+]
+
+def build_shot_configs():
+    """每次生成時隨機組合 5 張照片的動作：2 全身 + 2 下半身 + 1 腳部"""
+    full = random.sample(FULLBODY_POSES, 2)
+    lower = random.sample(LOWERBODY_POSES, 2)
+    feet = random.sample(FEET_POSES, 1)
+
+    return [
+        {"label": f"📷 全身照 ①（{full[0]['name']}）", "shot_desc": full[0]["shot_desc"]},
+        {"label": f"📷 全身照 ②（{full[1]['name']}）", "shot_desc": full[1]["shot_desc"]},
+        {"label": f"🦵 下半身特寫 ①（{lower[0]['name']}）", "shot_desc": lower[0]["shot_desc"]},
+        {"label": f"🦵 下半身特寫 ②（{lower[1]['name']}）", "shot_desc": lower[1]["shot_desc"]},
+        {"label": f"🦶 腳部特寫（{feet[0]['name']}）", "shot_desc": feet[0]["shot_desc"]},
+    ]
+
+# 初始化或使用已生成的 SHOT_CONFIGS（避免 rerun 時重新隨機）
+if "current_shot_configs" not in st.session_state:
+    st.session_state.current_shot_configs = build_shot_configs()
+SHOT_CONFIGS = st.session_state.current_shot_configs
 
 if not st.session_state.prompts:
     st.info("請先完成 Step 2 產出提示詞")
@@ -519,9 +574,13 @@ else:
     if st.session_state.selected_scene:
         st.info(f"🏠 使用場景：**{st.session_state.selected_scene}**（可在 Step 2 更換）")
 
-    st.markdown("將一次生成 **5 張連貫的照片組**：2 張全身照 + 3 張腳部 / 下半身特寫")
+    st.markdown("將一次生成 **5 張連貫的照片組**：2 張全身照 + 2 張下半身特寫 + 1 張腳部特寫（動作隨機組合）")
 
     if st.button("🎨 生成 5 張模特兒實穿照組", type="primary", use_container_width=False):
+        # 每次生成重新隨機組合動作
+        st.session_state.current_shot_configs = build_shot_configs()
+        SHOT_CONFIGS = st.session_state.current_shot_configs
+
         client = genai.Client(api_key=api_key)
 
         # 從 Step 2 取場景描述（每場景隨機選 1 組腳本）
@@ -655,62 +714,51 @@ for regen_idx in range(5):
 if st.session_state.model_images:
     st.markdown("### 📸 實穿照片組")
 
+    # 通用照片顯示函式
+    def _show_photo(img_data, idx, file_prefix):
+        if img_data.get("bytes"):
+            gen_img = Image.open(io.BytesIO(img_data["bytes"]))
+            st.image(gen_img, caption=img_data["label"], use_container_width=True)
+            btn_col1, btn_col2 = st.columns(2)
+            with btn_col1:
+                st.download_button(
+                    label="💾 下載",
+                    data=img_data["bytes"],
+                    file_name=f"{file_prefix}_{idx+1}.png",
+                    mime="image/png",
+                    use_container_width=True,
+                    key=f"dl_{file_prefix}_{idx}",
+                )
+            with btn_col2:
+                if st.button("🔄 重新生成", key=f"btn_regen_{file_prefix}_{idx}", use_container_width=True):
+                    st.session_state[f"regen_photo_{idx}"] = True
+                    st.rerun()
+        else:
+            st.error(f"❌ {img_data['label']}：{img_data.get('error', '生成失敗')}")
+            if st.button("🔄 重新生成", key=f"btn_regen_{file_prefix}_err_{idx}", use_container_width=True):
+                st.session_state[f"regen_photo_{idx}"] = True
+                st.rerun()
+
     # 第一行：2 張全身照
     st.markdown("**👗 全身照**")
     full_cols = st.columns(2)
-    for idx, img_data in enumerate(st.session_state.model_images[:2]):
-        with full_cols[idx]:
-            if img_data.get("bytes"):
-                gen_img = Image.open(io.BytesIO(img_data["bytes"]))
-                st.image(gen_img, caption=img_data["label"], use_container_width=True)
-                btn_col1, btn_col2 = st.columns(2)
-                with btn_col1:
-                    st.download_button(
-                        label="💾 下載",
-                        data=img_data["bytes"],
-                        file_name=f"model_fullbody_{idx+1}.png",
-                        mime="image/png",
-                        use_container_width=True,
-                        key=f"dl_full_{idx}",
-                    )
-                with btn_col2:
-                    if st.button("🔄 重新生成", key=f"btn_regen_full_{idx}", use_container_width=True):
-                        st.session_state[f"regen_photo_{idx}"] = True
-                        st.rerun()
-            else:
-                st.error(f"❌ {img_data['label']}：{img_data.get('error', '生成失敗')}")
-                if st.button("🔄 重新生成", key=f"btn_regen_full_err_{idx}", use_container_width=True):
-                    st.session_state[f"regen_photo_{idx}"] = True
-                    st.rerun()
+    for i in range(2):
+        with full_cols[i]:
+            _show_photo(st.session_state.model_images[i], i, "fullbody")
 
-    # 第二行：3 張特寫
-    st.markdown("**🦶 腳部 / 下半身特寫**")
-    detail_cols = st.columns(3)
-    for idx, img_data in enumerate(st.session_state.model_images[2:5]):
-        real_idx = idx + 2  # 在 SHOT_CONFIGS 中的實際索引
-        with detail_cols[idx]:
-            if img_data.get("bytes"):
-                gen_img = Image.open(io.BytesIO(img_data["bytes"]))
-                st.image(gen_img, caption=img_data["label"], use_container_width=True)
-                btn_col1, btn_col2 = st.columns(2)
-                with btn_col1:
-                    st.download_button(
-                        label="💾 下載",
-                        data=img_data["bytes"],
-                        file_name=f"model_detail_{idx+1}.png",
-                        mime="image/png",
-                        use_container_width=True,
-                        key=f"dl_detail_{idx}",
-                    )
-                with btn_col2:
-                    if st.button("🔄 重新生成", key=f"btn_regen_detail_{idx}", use_container_width=True):
-                        st.session_state[f"regen_photo_{real_idx}"] = True
-                        st.rerun()
-            else:
-                st.error(f"❌ {img_data['label']}：{img_data.get('error', '生成失敗')}")
-                if st.button("🔄 重新生成", key=f"btn_regen_detail_err_{idx}", use_container_width=True):
-                    st.session_state[f"regen_photo_{real_idx}"] = True
-                    st.rerun()
+    # 第二行：2 張下半身特寫
+    st.markdown("**🦵 下半身特寫**")
+    lower_cols = st.columns(2)
+    for i in range(2):
+        real_idx = i + 2
+        with lower_cols[i]:
+            _show_photo(st.session_state.model_images[real_idx], real_idx, "lower")
+
+    # 第三行：1 張腳部特寫
+    st.markdown("**🦶 腳部特寫**")
+    feet_col, _ = st.columns([1, 1])
+    with feet_col:
+        _show_photo(st.session_state.model_images[4], 4, "feet")
 
     # 圖片資訊
     successful = [i for i in st.session_state.model_images if i.get("bytes")]
