@@ -14,6 +14,7 @@ import base64
 import io
 import json
 import os
+import random
 import pathlib
 
 # ─────────────────────────────────────────
@@ -208,11 +209,32 @@ if not uploaded_file:
 elif not anthropic_key:
     st.warning("請先在左側 Sidebar 輸入 Anthropic API Key")
 else:
-    # ── 場景選擇（原本在 Step 3，移至此處） ──
+    # ── 場景選擇（6 種場景，每種有 2 組隨機腳本） ──
     scene_options = {
-        "簡約室內（白色大理石地板）": "sitting on white marble floor, clean minimal indoor background, soft natural window light, warm white tones",
-        "咖啡廳外拍（暖陽散景）": "outdoor cafe setting, warm golden afternoon sunlight, blurred bokeh background, film photography aesthetic",
-        "清爽白背景（電商主圖）": "pure white studio background, soft diffused studio lighting, bright and airy atmosphere, e-commerce hero shot",
+        "簡約室內（白色大理石地板）": [
+            "indoor setting with white marble floor, clean minimal Scandinavian interior, soft natural window light, warm white tones, potted green plants as accents",
+            "bright minimalist room with white marble tiles, sheer curtain diffused sunlight, light wood furniture, airy and clean atmosphere",
+        ],
+        "咖啡廳外拍（暖陽散景）": [
+            "outdoor European-style cafe terrace, warm golden afternoon sunlight, blurred bokeh of cafe umbrellas and greenery, vintage rattan chairs, cobblestone ground",
+            "cozy sidewalk cafe with string lights, late afternoon golden hour glow, espresso cup on table as prop, warm film photography tones with gentle lens flare",
+        ],
+        "清爽白背景（電商主圖）": [
+            "pure white studio cyclorama background, soft diffused studio lighting from above, bright and airy atmosphere, clean e-commerce hero shot",
+            "seamless white backdrop with subtle shadow on floor, rim lighting from behind, professional product photography studio setup",
+        ],
+        "日系街道散步（清新文青）": [
+            "quiet Japanese-style narrow alley with old wooden houses, dappled sunlight through leaves, a bicycle leaning on the wall, soft pastel color palette, Fuji film aesthetic",
+            "charming Japanese shopping street with small potted plants lining the path, morning soft light, vintage signboards, gentle nostalgic atmosphere",
+        ],
+        "校園青春（活力陽光）": [
+            "university campus green lawn with large trees, bright midday sunlight, red brick building in background, youthful energetic atmosphere, clear blue sky",
+            "school courtyard with wooden bench and scattered autumn leaves, warm afternoon light through campus trees, cheerful and vibrant student life atmosphere",
+        ],
+        "都市街拍（時尚潮流）": [
+            "urban city street with modern glass buildings, crosswalk and traffic blur in background, overcast diffused light, street fashion editorial style, concrete and steel tones",
+            "trendy neighborhood with colorful murals and graffiti wall, neon sign reflections on wet pavement after rain, edgy metropolitan vibe, high contrast cinematic look",
+        ],
     }
     selected_scene = st.selectbox("🏠 選擇場景", list(scene_options.keys()))
     st.session_state.selected_scene = selected_scene
@@ -246,7 +268,7 @@ else:
     sock_info_en = sock_type_en_map.get(sock_type, "socks")
     sock_length_desc = f", sock tube length approximately {sock_length}" if sock_length else ""
     sock_length_zh = f"，襪筒長度約 {sock_length}" if sock_length else ""
-    scene_desc = scene_options[selected_scene]
+    scene_desc = random.choice(scene_options[selected_scene])
     sock_type_zh = sock_type.split(" — ")[0]
 
     if st.button("🔍 分析圖片並自動產出提示詞", type="primary", use_container_width=False):
@@ -372,9 +394,12 @@ def generate_single_photo(api_key_val, shot_config, base_prompt, neg_prompt, sce
         f"Style: {base_prompt}, "
         f"photorealistic, commercial e-commerce photography, 8K resolution, "
         f"sharp fabric texture, feminine and elegant, editorial fashion quality.\n\n"
-        f"[CONSISTENCY]\n"
-        f"The socks must faithfully reproduce the pattern from the reference image. "
-        f"Maintain visual consistency: same model body type, same outfit styling, same lighting across all shots.\n\n"
+        f"[OUTFIT & VISUAL CONSISTENCY - CRITICAL]\n"
+        f"ALL 5 photos in this set MUST show the EXACT SAME outfit: same top, same skirt/shorts, same shoes. "
+        f"The ONLY product being showcased is the socks — everything else stays identical. "
+        f"Same model (same face, same body type, same hair style and color). "
+        f"Same lighting mood and color temperature across all shots. "
+        f"The socks must faithfully reproduce the pattern from the reference image.\n\n"
         f"[ANATOMY & BODY CONSISTENCY]\n"
         f"The ENTIRE body must face the same direction — upper body and lower body must be aligned. "
         f"DO NOT twist the torso so that the chest faces a different direction than the legs. "
@@ -425,7 +450,8 @@ SHOT_CONFIGS = [
             "FULL BODY photo from head to shoes, showing the ENTIRE person. "
             "The model is STANDING still on both feet, facing the camera. "
             "Slight hip tilt, relaxed arms by her side, weight on one leg. "
-            "Head cropped at eye level (chin, lips, jawline visible). "
+            "FACE FULLY VISIBLE: show her full face with natural light makeup, gentle smile, looking at camera. "
+            "Korean young woman, long hair, beautiful and natural. "
             "Complete outfit visible: top, skirt, socks, and shoes all in frame."
         ),
     },
@@ -438,7 +464,7 @@ SHOT_CONFIGS = [
             "Her chest, hips, knees, and feet ALL point to the LEFT. "
             "Side profile view, one leg stepping forward, the other pushing off behind. "
             "Arms swinging naturally matching the walking direction. "
-            "Head turned slightly toward camera showing jawline. "
+            "FACE VISIBLE in side profile: showing her jawline, nose, and gentle expression. "
             "DO NOT twist the torso. Upper body and lower body MUST face the same direction."
         ),
     },
@@ -488,16 +514,38 @@ else:
     if st.button("🎨 生成 5 張模特兒實穿照組", type="primary", use_container_width=False):
         client = genai.Client(api_key=api_key)
 
-        # 從 Step 2 取場景描述
+        # 從 Step 2 取場景描述（每場景隨機選 1 組腳本）
         scene_options_map = {
-            "簡約室內（白色大理石地板）": "sitting on white marble floor, clean minimal indoor background, soft natural window light, warm white tones",
-            "咖啡廳外拍（暖陽散景）": "outdoor cafe setting, warm golden afternoon sunlight, blurred bokeh background, film photography aesthetic",
-            "清爽白背景（電商主圖）": "pure white studio background, soft diffused studio lighting, bright and airy atmosphere, e-commerce hero shot",
+            "簡約室內（白色大理石地板）": [
+                "indoor setting with white marble floor, clean minimal Scandinavian interior, soft natural window light, warm white tones, potted green plants as accents",
+                "bright minimalist room with white marble tiles, sheer curtain diffused sunlight, light wood furniture, airy and clean atmosphere",
+            ],
+            "咖啡廳外拍（暖陽散景）": [
+                "outdoor European-style cafe terrace, warm golden afternoon sunlight, blurred bokeh of cafe umbrellas and greenery, vintage rattan chairs, cobblestone ground",
+                "cozy sidewalk cafe with string lights, late afternoon golden hour glow, espresso cup on table as prop, warm film photography tones with gentle lens flare",
+            ],
+            "清爽白背景（電商主圖）": [
+                "pure white studio cyclorama background, soft diffused studio lighting from above, bright and airy atmosphere, clean e-commerce hero shot",
+                "seamless white backdrop with subtle shadow on floor, rim lighting from behind, professional product photography studio setup",
+            ],
+            "日系街道散步（清新文青）": [
+                "quiet Japanese-style narrow alley with old wooden houses, dappled sunlight through leaves, a bicycle leaning on the wall, soft pastel color palette, Fuji film aesthetic",
+                "charming Japanese shopping street with small potted plants lining the path, morning soft light, vintage signboards, gentle nostalgic atmosphere",
+            ],
+            "校園青春（活力陽光）": [
+                "university campus green lawn with large trees, bright midday sunlight, red brick building in background, youthful energetic atmosphere, clear blue sky",
+                "school courtyard with wooden bench and scattered autumn leaves, warm afternoon light through campus trees, cheerful and vibrant student life atmosphere",
+            ],
+            "都市街拍（時尚潮流）": [
+                "urban city street with modern glass buildings, crosswalk and traffic blur in background, overcast diffused light, street fashion editorial style, concrete and steel tones",
+                "trendy neighborhood with colorful murals and graffiti wall, neon sign reflections on wet pavement after rain, edgy metropolitan vibe, high contrast cinematic look",
+            ],
         }
-        scene_desc = scene_options_map.get(
+        scene_variants = scene_options_map.get(
             st.session_state.selected_scene or "清爽白背景（電商主圖）",
-            "pure white studio background, soft diffused studio lighting"
+            ["pure white studio background, soft diffused studio lighting"]
         )
+        scene_desc = random.choice(scene_variants)
 
         base_prompt = st.session_state.prompts["positive_en"]
         neg_prompt = st.session_state.prompts["negative_en"]
@@ -533,14 +581,36 @@ else:
 def _get_regen_params():
     """取得重新生成所需的共用參數"""
     scene_options_map = {
-        "簡約室內（白色大理石地板）": "sitting on white marble floor, clean minimal indoor background, soft natural window light, warm white tones",
-        "咖啡廳外拍（暖陽散景）": "outdoor cafe setting, warm golden afternoon sunlight, blurred bokeh background, film photography aesthetic",
-        "清爽白背景（電商主圖）": "pure white studio background, soft diffused studio lighting, bright and airy atmosphere, e-commerce hero shot",
+        "簡約室內（白色大理石地板）": [
+            "indoor setting with white marble floor, clean minimal Scandinavian interior, soft natural window light, warm white tones, potted green plants as accents",
+            "bright minimalist room with white marble tiles, sheer curtain diffused sunlight, light wood furniture, airy and clean atmosphere",
+        ],
+        "咖啡廳外拍（暖陽散景）": [
+            "outdoor European-style cafe terrace, warm golden afternoon sunlight, blurred bokeh of cafe umbrellas and greenery, vintage rattan chairs, cobblestone ground",
+            "cozy sidewalk cafe with string lights, late afternoon golden hour glow, espresso cup on table as prop, warm film photography tones with gentle lens flare",
+        ],
+        "清爽白背景（電商主圖）": [
+            "pure white studio cyclorama background, soft diffused studio lighting from above, bright and airy atmosphere, clean e-commerce hero shot",
+            "seamless white backdrop with subtle shadow on floor, rim lighting from behind, professional product photography studio setup",
+        ],
+        "日系街道散步（清新文青）": [
+            "quiet Japanese-style narrow alley with old wooden houses, dappled sunlight through leaves, a bicycle leaning on the wall, soft pastel color palette, Fuji film aesthetic",
+            "charming Japanese shopping street with small potted plants lining the path, morning soft light, vintage signboards, gentle nostalgic atmosphere",
+        ],
+        "校園青春（活力陽光）": [
+            "university campus green lawn with large trees, bright midday sunlight, red brick building in background, youthful energetic atmosphere, clear blue sky",
+            "school courtyard with wooden bench and scattered autumn leaves, warm afternoon light through campus trees, cheerful and vibrant student life atmosphere",
+        ],
+        "都市街拍（時尚潮流）": [
+            "urban city street with modern glass buildings, crosswalk and traffic blur in background, overcast diffused light, street fashion editorial style, concrete and steel tones",
+            "trendy neighborhood with colorful murals and graffiti wall, neon sign reflections on wet pavement after rain, edgy metropolitan vibe, high contrast cinematic look",
+        ],
     }
-    sd = scene_options_map.get(
+    scene_variants = scene_options_map.get(
         st.session_state.selected_scene or "清爽白背景（電商主圖）",
-        "pure white studio background, soft diffused studio lighting"
+        ["pure white studio background, soft diffused studio lighting"]
     )
+    sd = random.choice(scene_variants)
     bp = st.session_state.prompts.get("positive_en", "") if st.session_state.prompts else ""
     np_ = st.session_state.prompts.get("negative_en", "") if st.session_state.prompts else ""
     rp = None
