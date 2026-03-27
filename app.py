@@ -134,7 +134,7 @@ with st.sidebar:
 # ─────────────────────────────────────────
 # Session State 初始化
 # ─────────────────────────────────────────
-for key in ["prompts", "model_image_bytes", "captions", "upload_mime"]:
+for key in ["prompts", "model_image_bytes", "captions", "upload_mime", "selected_scene"]:
     if key not in st.session_state:
         st.session_state[key] = None
 
@@ -206,6 +206,45 @@ if not uploaded_file:
 elif not anthropic_key:
     st.warning("請先在左側 Sidebar 輸入 Anthropic API Key")
 else:
+    # ── 場景選擇（原本在 Step 3，移至此處） ──
+    scene_options = {
+        "簡約室內（白色大理石地板）": "sitting on white marble floor, clean minimal indoor background, soft natural window light, warm white tones",
+        "咖啡廳外拍（暖陽散景）": "outdoor cafe setting, warm golden afternoon sunlight, blurred bokeh background, film photography aesthetic",
+        "清爽白背景（電商主圖）": "pure white studio background, soft diffused studio lighting, bright and airy atmosphere, e-commerce hero shot",
+    }
+    selected_scene = st.selectbox("🏠 選擇場景", list(scene_options.keys()))
+    st.session_state.selected_scene = selected_scene
+
+    # ── 襪子資訊欄位 ──
+    col_sock1, col_sock2 = st.columns(2)
+    with col_sock1:
+        sock_type = st.selectbox(
+            "🧦 襪子類型",
+            [
+                "長襪 — 小腿肚以上",
+                "中筒襪 — 腳踝以上，小腿肚以下",
+                "短襪 — 剛好蓋過腳踝",
+                "隱形襪 — 露出腳踝",
+            ],
+        )
+    with col_sock2:
+        sock_length = st.text_input(
+            "📏 襪筒長度",
+            placeholder="例：25cm、膝下10cm",
+            help="輸入襪子的實際長度或相對位置描述"
+        )
+
+    # ── 襪子資訊組合 ──
+    sock_type_en_map = {
+        "長襪 — 小腿肚以上": "knee-high socks (above calf)",
+        "中筒襪 — 腳踝以上，小腿肚以下": "crew socks / mid-calf socks (above ankle, below calf)",
+        "短襪 — 剛好蓋過腳踝": "ankle socks (just covering the ankle)",
+        "隱形襪 — 露出腳踝": "no-show socks / invisible socks (ankle exposed)",
+    }
+    sock_info_en = sock_type_en_map.get(sock_type, "socks")
+    sock_length_info = f", sock tube length approximately {sock_length}" if sock_length else ""
+    scene_desc = scene_options[selected_scene]
+
     if st.button("🔍 分析圖片並自動產出提示詞", type="primary", use_container_width=False):
         with st.spinner("Claude 正在分析商品圖片，自動生成提示詞…"):
             try:
@@ -214,25 +253,31 @@ else:
                 img_base64 = base64.standard_b64encode(img_bytes).decode("utf-8")
                 mime_type = st.session_state.upload_mime or "image/jpeg"
 
-                analysis_prompt = """You are a professional e-commerce fashion photographer and AI image prompt engineer specializing in Korean style.
+                analysis_prompt = f"""You are a professional e-commerce fashion photographer and AI image prompt engineer specializing in Korean style.
 
 Analyze this product flat lay image carefully and generate AI image generation prompts for a Korean female model wearing this product.
 
+PRODUCT INFO:
+- Product type: {sock_info_en}{sock_length_info}
+- Scene / Background: {scene_desc}
+
 IMPORTANT RULES:
-- Do NOT describe the specific pattern, color, or design details of the product itself
+- Do NOT describe the specific pattern, color, or design details of the product itself (the reference image will be provided separately to the image generation model)
 - Focus on the MODEL SCENE: pose, angle, background, lighting, styling
+- The sock type is "{sock_info_en}" — make sure the pose and camera angle clearly showcase socks at the correct height on the leg
 - Shot must be LOWER BODY only (waist down, include waist)
 - Korean female model aesthetic, slim legs
 - E-commerce commercial quality
 - Slight side angle to showcase the product
+- Incorporate the selected scene/background description into the positive prompt
 - The negative prompt should prevent common AI image generation errors
 
 Return ONLY a valid JSON object (no markdown, no extra text) with this exact structure:
-{
-  "positive_en": "Korean female model, slim legs, [pose details], lower body shot from waist down, [outfit pairing], [background], [lighting], [photography quality]",
-  "positive_zh": "韓系女性模特兒，[姿勢細節]，腰部以下畫面，[服裝搭配]，[背景]，[光線]，[攝影質感]",
-  "negative_en": "full body, face visible, upper body dominant, extra limbs, distorted feet, deformed toes, blurry, low quality, pixelated, watermark, text overlay, logo, jpeg artifacts, overexposed, dark shadows, plastic skin, unrealistic proportions, missing product, duplicate body parts, bad anatomy, extra fingers, nsfw"
-}"""
+{{
+  "positive_en": "Korean female model, slim legs, wearing {sock_info_en}, [pose details], lower body shot from waist down, [outfit pairing], {scene_desc}, [lighting], [photography quality]",
+  "positive_zh": "韓系女性模特兒，穿著{sock_type.split(' — ')[0]}，[姿勢細節]，腰部以下畫面，[服裝搭配]，[場景]，[光線]，[攝影質感]",
+  "negative_en": "full body, face visible, upper body dominant, extra limbs, distorted feet, deformed toes, blurry, low quality, pixelated, watermark, text overlay, logo, jpeg artifacts, overexposed, dark shadows, plastic skin, unrealistic proportions, missing product, duplicate body parts, bad anatomy, extra fingers, nsfw, wrong sock length, barefoot"
+}}"""
 
                 response = claude_client.messages.create(
                     model="claude-sonnet-4-6",
@@ -312,18 +357,25 @@ if not st.session_state.prompts:
 elif not api_key:
     st.warning("請先在左側 Sidebar 輸入 Gemini API Key")
 else:
-    scene_options = {
-        "簡約室內（白色大理石地板）": "sitting on white marble floor, clean minimal indoor background, soft natural window light, warm white tones",
-        "咖啡廳外拍（暖陽散景）": "outdoor cafe setting, warm golden afternoon sunlight, blurred bokeh background, film photography aesthetic",
-        "清爽白背景（電商主圖）": "pure white studio background, soft diffused studio lighting, bright and airy atmosphere, e-commerce hero shot",
-    }
-    selected_scene = st.selectbox("🏠 選擇場景", list(scene_options.keys()))
-    scene_desc = scene_options[selected_scene]
+    # 顯示 Step 2 選擇的場景（唯讀提示）
+    if st.session_state.selected_scene:
+        st.info(f"🏠 使用場景：**{st.session_state.selected_scene}**（可在 Step 2 更換）")
 
     if st.button("🎨 生成模特兒實穿照", type="primary", use_container_width=False):
-        with st.spinner("Gemini 正在生成圖片，約需 30～60 秒…"):
+        with st.spinner("Nano Banana 2 正在生成圖片，約需 30～60 秒…"):
             try:
                 client = genai.Client(api_key=api_key)
+
+                # 從 Step 2 取場景描述
+                scene_options_map = {
+                    "簡約室內（白色大理石地板）": "sitting on white marble floor, clean minimal indoor background, soft natural window light, warm white tones",
+                    "咖啡廳外拍（暖陽散景）": "outdoor cafe setting, warm golden afternoon sunlight, blurred bokeh background, film photography aesthetic",
+                    "清爽白背景（電商主圖）": "pure white studio background, soft diffused studio lighting, bright and airy atmosphere, e-commerce hero shot",
+                }
+                scene_desc = scene_options_map.get(
+                    st.session_state.selected_scene or "清爽白背景（電商主圖）",
+                    "pure white studio background, soft diffused studio lighting"
+                )
 
                 base_prompt = st.session_state.prompts["positive_en"]
                 generation_prompt = (
