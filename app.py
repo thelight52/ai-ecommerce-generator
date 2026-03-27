@@ -135,7 +135,7 @@ with st.sidebar:
 # ─────────────────────────────────────────
 # Session State 初始化
 # ─────────────────────────────────────────
-for key in ["prompts", "model_image_bytes", "model_images", "captions", "upload_mime", "selected_scene"]:
+for key in ["prompts", "model_image_bytes", "model_images", "captions", "upload_mime", "selected_scene", "video_bytes", "video_generating"]:
     if key not in st.session_state:
         st.session_state[key] = None
 if "model_images" not in st.session_state or st.session_state.model_images is None:
@@ -917,7 +917,139 @@ if st.session_state.captions:
         )
 
 # ─────────────────────────────────────────
+# STEP 5：生成穿搭短影音
+# ─────────────────────────────────────────
+st.markdown('<div class="step-header">Step 5 · 🎬 生成穿搭短影音（含配樂）</div>', unsafe_allow_html=True)
+
+if not st.session_state.model_images:
+    st.info("請先完成 Step 3 生成實穿照片組")
+elif not api_key:
+    st.warning("請先在左側 Sidebar 輸入 Gemini API Key")
+else:
+    successful_imgs = [i for i in st.session_state.model_images if i.get("bytes")]
+    if not successful_imgs:
+        st.warning("沒有可用的實穿照片，請先在 Step 3 生成")
+    else:
+        st.markdown("從實穿照片中選擇一張作為影片的**起始畫面**，Veo 3.1 會自動生成動態影片並配上音樂。")
+
+        # 選擇起始照片
+        img_labels = [img["label"] for img in successful_imgs]
+        selected_img_label = st.selectbox("📷 選擇起始照片", img_labels, key="video_source_img")
+        selected_img_data = next(i for i in successful_imgs if i["label"] == selected_img_label)
+
+        # 預覽選擇的照片
+        preview_img = Image.open(io.BytesIO(selected_img_data["bytes"]))
+        st.image(preview_img, caption=f"起始畫面：{selected_img_label}", width=300)
+
+        # 影片設定
+        col_ratio, col_res = st.columns(2)
+        with col_ratio:
+            video_ratio = st.selectbox("📐 影片比例", ["9:16（直式 Reels）", "16:9（橫式）"], key="video_ratio")
+        with col_res:
+            video_res = st.selectbox("🎞️ 解析度", ["720p（快速）", "1080p（高畫質）"], key="video_res")
+
+        # 影片動態描述
+        scene_name = st.session_state.selected_scene or "未指定"
+        prompt_en = st.session_state.prompts.get("positive_en", "") if st.session_state.prompts else ""
+
+        video_prompt_default = (
+            f"A Korean female model in a stylish outfit with cute patterned socks, "
+            f"natural gentle movement like walking, turning, or adjusting her skirt. "
+            f"Scene: {scene_name}. Smooth cinematic camera motion, warm natural lighting, "
+            f"Korean fashion editorial video quality. "
+            f"Background music: upbeat soft lo-fi or indie pop, cheerful and trendy mood."
+        )
+
+        video_prompt = st.text_area(
+            "🎬 影片動態描述（可自訂）",
+            value=video_prompt_default,
+            height=100,
+            key="video_prompt_input",
+            help="描述影片中模特兒的動作、鏡頭運動、氛圍和配樂風格"
+        )
+
+        if st.button("🎬 生成 8 秒穿搭短影音", type="primary", use_container_width=False):
+            with st.spinner("🎬 Veo 3.1 正在生成影片，約需 2～5 分鐘，請耐心等待…"):
+                try:
+                    import time as _time
+                    client = genai.Client(api_key=api_key)
+
+                    # 準備起始圖片
+                    source_img = Image.open(io.BytesIO(selected_img_data["bytes"]))
+                    img_buf = io.BytesIO()
+                    source_img.save(img_buf, format="PNG")
+                    img_buf.seek(0)
+
+                    ref_image = types.Image.from_image_bytes(img_buf.read())
+
+                    # 解析比例和解析度
+                    aspect = "9:16" if "9:16" in video_ratio else "16:9"
+                    resolution = "720p" if "720p" in video_res else "1080p"
+
+                    # 發起影片生成
+                    operation = client.models.generate_videos(
+                        model="veo-3.1-generate-preview",
+                        prompt=video_prompt,
+                        image=ref_image,
+                        config=types.GenerateVideosConfig(
+                            aspect_ratio=aspect,
+                            duration_seconds=8,
+                        ),
+                    )
+
+                    # 輪詢等待完成
+                    progress = st.progress(0, text="影片生成中…")
+                    poll_count = 0
+                    max_polls = 60  # 最多等 10 分鐘
+
+                    while not operation.done and poll_count < max_polls:
+                        poll_count += 1
+                        progress.progress(
+                            min(poll_count / max_polls, 0.95),
+                            text=f"影片生成中… 已等待 {poll_count * 10} 秒"
+                        )
+                        _time.sleep(10)
+                        operation = client.operations.get(operation)
+
+                    if operation.done and operation.response:
+                        progress.progress(1.0, text="✅ 影片生成完成！")
+                        generated_video = operation.response.generated_videos[0]
+                        client.files.download(file=generated_video.video)
+                        video_data = generated_video.video.read_bytes()
+                        st.session_state.video_bytes = video_data
+                        st.success("✅ 穿搭短影音生成成功！（含 AI 自動配樂）")
+                    else:
+                        st.error("❌ 影片生成超時或失敗，請稍後再試。")
+
+                except Exception as e:
+                    st.error(f"❌ 影片生成失敗：{e}")
+                    st.markdown(
+                        '<div class="info-box">💡 提示：Veo 3.1 影片生成需要付費 API Key。'
+                        '請至 <a href="https://aistudio.google.com/apikey" target="_blank">AI Studio</a> 確認配額。</div>',
+                        unsafe_allow_html=True,
+                    )
+
+# 顯示已生成的影片
+if st.session_state.video_bytes:
+    st.markdown("### 🎥 穿搭短影音預覽")
+    st.video(st.session_state.video_bytes, format="video/mp4")
+
+    col_vdl1, col_vdl2 = st.columns(2)
+    with col_vdl1:
+        st.download_button(
+            label="💾 下載影片 MP4",
+            data=st.session_state.video_bytes,
+            file_name="sock_styling_reel.mp4",
+            mime="video/mp4",
+            use_container_width=True,
+        )
+    with col_vdl2:
+        st.markdown(f"**影片資訊**：`{len(st.session_state.video_bytes)/1024/1024:.1f} MB`")
+
+st.divider()
+
+# ─────────────────────────────────────────
 # Footer
 # ─────────────────────────────────────────
 st.divider()
-st.caption("🧦 AI 電商素材生成器 · Powered by Google Gemini API · Built with Streamlit")
+st.caption("🧦 AI 電商素材生成器 · Powered by Google Gemini + Anthropic Claude + Veo 3.1 · Built with Streamlit")
