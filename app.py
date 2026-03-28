@@ -894,26 +894,32 @@ if st.session_state.model_images:
                 st.session_state[f"regen_photo_{idx}"] = True
                 st.rerun()
 
+    total_imgs = len(st.session_state.model_images)
+
     # 第一行：2 張全身照
     st.markdown("**👗 全身照**")
     full_cols = st.columns(2)
     for i in range(2):
         with full_cols[i]:
-            _show_photo(st.session_state.model_images[i], i, "fullbody")
+            if i < total_imgs:
+                _show_photo(st.session_state.model_images[i], i, "fullbody")
 
-    # 第二行：2 張下半身特寫
-    st.markdown("**🦵 下半身特寫**")
-    lower_cols = st.columns(2)
-    for i in range(2):
-        real_idx = i + 2
-        with lower_cols[i]:
-            _show_photo(st.session_state.model_images[real_idx], real_idx, "lower")
+    # 第二行：2 張下半身特寫（需要 index 2, 3）
+    if total_imgs > 2:
+        st.markdown("**🦵 下半身特寫**")
+        lower_cols = st.columns(2)
+        for i in range(2):
+            real_idx = i + 2
+            with lower_cols[i]:
+                if real_idx < total_imgs:
+                    _show_photo(st.session_state.model_images[real_idx], real_idx, "lower")
 
-    # 第三行：1 張腳部特寫
-    st.markdown("**🦶 腳部特寫**")
-    feet_col, _ = st.columns([1, 1])
-    with feet_col:
-        _show_photo(st.session_state.model_images[4], 4, "feet")
+    # 第三行：1 張腳部特寫（需要 index 4）
+    if total_imgs > 4:
+        st.markdown("**🦶 腳部特寫**")
+        feet_col, _ = st.columns([1, 1])
+        with feet_col:
+            _show_photo(st.session_state.model_images[4], 4, "feet")
 
     # 圖片資訊
     successful = [i for i in st.session_state.model_images if i.get("bytes")]
