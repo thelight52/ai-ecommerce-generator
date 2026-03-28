@@ -209,7 +209,7 @@ if not uploaded_file:
 elif not anthropic_key:
     st.warning("請先在左側 Sidebar 輸入 Anthropic API Key")
 else:
-    # ── 場景選擇（6 種場景，每種有 2 組隨機腳本） ──
+    # ── 場景選擇（7 種場景，每種有 2 組隨機腳本） ──
     scene_options = {
         "簡約室內（白色大理石地板）": [
             "indoor setting with white marble floor, clean minimal Scandinavian interior, soft natural window light, warm white tones, potted green plants as accents",
@@ -234,6 +234,10 @@ else:
         "都市街拍（時尚潮流）": [
             "urban city street with modern glass buildings, crosswalk and traffic blur in background, overcast diffused light, street fashion editorial style, concrete and steel tones",
             "trendy neighborhood with colorful murals and graffiti wall, neon sign reflections on wet pavement after rain, edgy metropolitan vibe, high contrast cinematic look",
+        ],
+        "公園遊樂場（可愛活潑）": [
+            "colorful children's playground in a sunny park, bright yellow slide and climbing frame in background, soft green rubber mat ground, vivid primary color play equipment, cheerful and playful atmosphere, warm natural sunlight, youthful and energetic mood",
+            "outdoor playground with swings and rope climbing net, colorful plastic play structures, green grass and rubber safety surface, bright midday sun with clear blue sky, fun and lively atmosphere, candy-colored background tones",
         ],
     }
     selected_scene = st.selectbox("🏠 選擇場景", list(scene_options.keys()))
@@ -610,6 +614,10 @@ else:
                 "urban city street with modern glass buildings, crosswalk and traffic blur in background, overcast diffused light, street fashion editorial style, concrete and steel tones",
                 "trendy neighborhood with colorful murals and graffiti wall, neon sign reflections on wet pavement after rain, edgy metropolitan vibe, high contrast cinematic look",
             ],
+            "公園遊樂場（可愛活潑）": [
+                "colorful children's playground in a sunny park, bright yellow slide and climbing frame in background, soft green rubber mat ground, vivid primary color play equipment, cheerful and playful atmosphere, warm natural sunlight, youthful and energetic mood",
+                "outdoor playground with swings and rope climbing net, colorful plastic play structures, green grass and rubber safety surface, bright midday sun with clear blue sky, fun and lively atmosphere, candy-colored background tones",
+            ],
         }
         scene_variants = scene_options_map.get(
             st.session_state.selected_scene or "清爽白背景（電商主圖）",
@@ -674,6 +682,10 @@ def _get_regen_params():
         "都市街拍（時尚潮流）": [
             "urban city street with modern glass buildings, crosswalk and traffic blur in background, overcast diffused light, street fashion editorial style, concrete and steel tones",
             "trendy neighborhood with colorful murals and graffiti wall, neon sign reflections on wet pavement after rain, edgy metropolitan vibe, high contrast cinematic look",
+        ],
+        "公園遊樂場（可愛活潑）": [
+            "colorful children's playground in a sunny park, bright yellow slide and climbing frame in background, soft green rubber mat ground, vivid primary color play equipment, cheerful and playful atmosphere, warm natural sunlight, youthful and energetic mood",
+            "outdoor playground with swings and rope climbing net, colorful plastic play structures, green grass and rubber safety surface, bright midday sun with clear blue sky, fun and lively atmosphere, candy-colored background tones",
         ],
     }
     scene_variants = scene_options_map.get(
