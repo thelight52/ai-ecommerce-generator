@@ -987,28 +987,44 @@ else:
                     import time as _time
                     client = genai.Client(api_key=api_key)
 
-                    # 準備起始圖片（寫入暫存檔，Image.from_file 讀取）
-                    import tempfile, os
-                    source_img = Image.open(io.BytesIO(selected_img_data["bytes"]))
-                    tmp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-                    source_img.save(tmp_file, format="PNG")
-                    tmp_file.close()
-                    ref_image = types.Image.from_file(tmp_file.name)
-
-                    # 解析比例和解析度
+                    # 解析比例
                     aspect = "9:16" if "9:16" in video_ratio else "16:9"
-                    resolution = "720p" if "720p" in video_res else "1080p"
+
+                    # 嘗試上傳起始圖片供 Veo 參考
+                    ref_image = None
+                    try:
+                        import tempfile, os
+                        source_img = Image.open(io.BytesIO(selected_img_data["bytes"]))
+                        # 縮小圖片至合理尺寸避免上傳過大
+                        source_img.thumbnail((1024, 1024))
+                        tmp_path = os.path.join(tempfile.gettempdir(), "veo_input.png")
+                        source_img.save(tmp_path, format="PNG")
+                        # 用 files.upload 上傳圖片到 Gemini
+                        uploaded_ref = client.files.upload(file=tmp_path)
+                        # 等待檔案處理完成
+                        while uploaded_ref.state.name == "PROCESSING":
+                            _time.sleep(2)
+                            uploaded_ref = client.files.get(name=uploaded_ref.name)
+                        if uploaded_ref.state.name == "ACTIVE":
+                            ref_image = types.Image(image=uploaded_ref)
+                        os.unlink(tmp_path)
+                    except Exception as img_err:
+                        st.warning(f"⚠️ 圖片上傳略過，改用純文字生成影片：{img_err}")
+                        ref_image = None
 
                     # 發起影片生成
-                    operation = client.models.generate_videos(
-                        model="veo-3.1-generate-preview",
-                        prompt=video_prompt,
-                        image=ref_image,
-                        config=types.GenerateVideosConfig(
+                    gen_kwargs = {
+                        "model": "veo-3.1-generate-preview",
+                        "prompt": video_prompt,
+                        "config": types.GenerateVideosConfig(
                             aspect_ratio=aspect,
                             duration_seconds=8,
                         ),
-                    )
+                    }
+                    if ref_image is not None:
+                        gen_kwargs["image"] = ref_image
+
+                    operation = client.models.generate_videos(**gen_kwargs)
 
                     # 輪詢等待完成
                     progress = st.progress(0, text="影片生成中…")
@@ -1043,12 +1059,6 @@ else:
                         '請至 <a href="https://aistudio.google.com/apikey" target="_blank">AI Studio</a> 確認配額。</div>',
                         unsafe_allow_html=True,
                     )
-                finally:
-                    # 清理暫存圖片
-                    try:
-                        os.unlink(tmp_file.name)
-                    except Exception:
-                        pass
 
 # 顯示已生成的影片
 if st.session_state.video_bytes:
