@@ -987,13 +987,13 @@ else:
                     import time as _time
                     client = genai.Client(api_key=api_key)
 
-                    # 準備起始圖片
+                    # 準備起始圖片（寫入暫存檔，Image.from_file 讀取）
+                    import tempfile, os
                     source_img = Image.open(io.BytesIO(selected_img_data["bytes"]))
-                    img_buf = io.BytesIO()
-                    source_img.save(img_buf, format="PNG")
-                    img_buf.seek(0)
-
-                    ref_image = types.Image.from_image_bytes(img_buf.read())
+                    tmp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+                    source_img.save(tmp_file, format="PNG")
+                    tmp_file.close()
+                    ref_image = types.Image.from_file(tmp_file.name)
 
                     # 解析比例和解析度
                     aspect = "9:16" if "9:16" in video_ratio else "16:9"
@@ -1041,6 +1041,12 @@ else:
                         '請至 <a href="https://aistudio.google.com/apikey" target="_blank">AI Studio</a> 確認配額。</div>',
                         unsafe_allow_html=True,
                     )
+                finally:
+                    # 清理暫存圖片
+                    try:
+                        os.unlink(tmp_file.name)
+                    except Exception:
+                        pass
 
 # 顯示已生成的影片
 if st.session_state.video_bytes:
