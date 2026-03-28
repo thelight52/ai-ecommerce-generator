@@ -135,7 +135,7 @@ with st.sidebar:
 # ─────────────────────────────────────────
 # Session State 初始化
 # ─────────────────────────────────────────
-for key in ["prompts", "model_image_bytes", "model_images", "captions", "upload_mime", "selected_scene", "video_bytes", "video_generating"]:
+for key in ["prompts", "model_image_bytes", "model_images", "captions", "upload_mime", "selected_scene", "video_bytes", "video_generating", "hero_image", "hero_generated", "remaining_generated"]:
     if key not in st.session_state:
         st.session_state[key] = None
 if "model_images" not in st.session_state or st.session_state.model_images is None:
@@ -396,7 +396,7 @@ def generate_single_photo(api_key_val, shot_config, base_prompt, neg_prompt, sce
             f"[VISUAL CONSISTENCY REFERENCE — HIGHEST PRIORITY]\n"
             f"A 'hero reference photo' is attached (the second image). "
             f"You MUST match the following elements from that hero photo EXACTLY:\n"
-            f"  • SAME outfit: identical top, skirt/shorts, shoes (color, style, material)\n"
+            f"  • SAME outfit: identical clothing pieces, shoes (color, style, material)\n"
             f"  • SAME model appearance: same face, hair style, hair color, body type\n"
             f"  • SAME background/scene: identical location, props, and lighting mood\n"
             f"  • SAME color temperature and photography style\n"
@@ -417,7 +417,7 @@ def generate_single_photo(api_key_val, shot_config, base_prompt, neg_prompt, sce
         f"photorealistic, commercial e-commerce photography, 8K resolution, "
         f"sharp fabric texture, feminine and elegant, editorial fashion quality.\n\n"
         f"[OUTFIT & VISUAL CONSISTENCY - CRITICAL]\n"
-        f"ALL 5 photos in this set MUST show the EXACT SAME outfit: same top, same skirt/shorts, same shoes. "
+        f"ALL 5 photos in this set MUST show the EXACT SAME outfit: same clothing pieces, same colors, same shoes. "
         f"The ONLY product being showcased is the socks — everything else stays identical. "
         f"Same model (same face, same body type, same hair style and color). "
         f"Same lighting mood and color temperature across all shots. "
@@ -516,7 +516,7 @@ FULLBODY_POSES = [
             "Relaxed playful posture, one hand resting on the surface, the other touching hair or holding a prop. "
             "FACE FULLY VISIBLE: natural light makeup, gentle smile, looking at camera. "
             "Korean young woman, long hair. Socks and shoes clearly visible on dangling feet. "
-            "Complete outfit visible: top, skirt, socks, and shoes all in frame."
+            "Complete outfit visible: clothing, socks, and shoes all in frame."
         ),
     },
     {
@@ -526,7 +526,7 @@ FULLBODY_POSES = [
             "Model standing with a playful pose: one foot slightly lifted or on tiptoe, body tilted, "
             "one hand touching hat/hair or raised cheerfully. Dynamic and youthful energy. "
             "FACE FULLY VISIBLE: bright smile, looking at camera, natural light makeup. "
-            "Korean young woman, long hair. Complete outfit visible: top, skirt, socks, and shoes."
+            "Korean young woman, long hair. Complete outfit visible: clothing, socks, and shoes."
         ),
     },
     {
@@ -536,7 +536,7 @@ FULLBODY_POSES = [
             "Model leaning back casually on a railing, bench, or chair, legs stretched forward and slightly raised. "
             "One hand holding a drink or prop, relaxed happy expression. Socks are prominently displayed on the raised feet. "
             "FACE FULLY VISIBLE: natural smile, looking at camera or upward. "
-            "Korean young woman, long hair. Complete outfit visible: top, skirt, socks, and shoes."
+            "Korean young woman, long hair. Complete outfit visible: clothing, socks, and shoes."
         ),
     },
 ]
@@ -628,9 +628,39 @@ else:
     if st.session_state.selected_scene:
         st.info(f"🏠 使用場景：**{st.session_state.selected_scene}**（可在 Step 2 更換）")
 
-    st.markdown("將一次生成 **5 張連貫的照片組**：2 張全身照 + 2 張下半身特寫 + 1 張腳部特寫（動作隨機組合）")
+    # ── 穿搭風格選擇 ──
+    OUTFIT_STYLES = {
+        "T恤 + 百褶短裙（甜美韓系）": (
+            "wearing a soft pastel short-sleeve T-shirt tucked into a pleated mini skirt, "
+            "white canvas sneakers, sweet Korean girl-next-door style"
+        ),
+        "針織衫 + A字裙（溫柔氣質）": (
+            "wearing a delicate knit cardigan or short-sleeve knit top with an A-line midi skirt, "
+            "Mary Jane shoes or loafers, elegant and feminine Korean style"
+        ),
+        "衛衣 + 寬褲（休閒街頭）": (
+            "wearing an oversized cropped hoodie or sweatshirt with wide-leg pants or joggers, "
+            "chunky sneakers or platform shoes, casual Korean streetwear style"
+        ),
+        "襯衫 + 牛仔短褲（清新日常）": (
+            "wearing a crisp button-down shirt (tucked in or tied at waist) with denim shorts, "
+            "white sneakers or slip-on shoes, fresh and casual everyday Korean look"
+        ),
+        "背心洋裝（簡約一件式）": (
+            "wearing a sleeveless mini dress or pinafore dress over a simple inner top, "
+            "flat sandals or canvas shoes, minimalist one-piece Korean outfit"
+        ),
+        "運動套裝（活力元氣）": (
+            "wearing a sporty cropped zip-up jacket or sports bra top with bike shorts or track pants, "
+            "athletic running shoes, energetic Korean athleisure style"
+        ),
+    }
+    selected_outfit = st.selectbox("👗 穿搭風格", list(OUTFIT_STYLES.keys()), key="outfit_style")
+    outfit_desc = OUTFIT_STYLES[selected_outfit]
 
-    if st.button("🎨 生成 5 張模特兒實穿照組", type="primary", use_container_width=False):
+    st.markdown("**Step 3a**: 先生成第 1 張基準照 → **Step 3b**: 確認後再生成其餘 4 張")
+
+    if st.button("🎨 生成第 1 張基準實穿照", type="primary", use_container_width=False):
         # 每次生成重新隨機組合動作
         st.session_state.current_shot_configs = build_shot_configs()
         SHOT_CONFIGS = st.session_state.current_shot_configs
@@ -674,7 +704,7 @@ else:
         )
         scene_desc = random.choice(scene_variants)
 
-        base_prompt = st.session_state.prompts["positive_en"]
+        base_prompt = st.session_state.prompts["positive_en"] + f", {outfit_desc}"
         neg_prompt = st.session_state.prompts["negative_en"]
 
         # 準備上傳的原始商品圖片
@@ -684,41 +714,80 @@ else:
             mime_type = st.session_state.upload_mime or "image/jpeg"
             ref_part = types.Part.from_bytes(data=img_bytes, mime_type=mime_type)
 
-        generated_images = []
-        progress_bar = st.progress(0, text="準備生成照片組…")
-        hero_ref_part = None  # 第一張照片的參考 Part
+        # ── Step 3a: 只生成第 1 張基準照 ──
+        hero_shot = SHOT_CONFIGS[0]
+        with st.spinner(f"正在生成基準照 {hero_shot['label']}…約需 30～60 秒"):
+            result = generate_single_photo(api_key, hero_shot, base_prompt, neg_prompt, scene_desc, ref_part)
 
-        for idx, shot in enumerate(SHOT_CONFIGS):
-            if idx == 0:
-                progress_bar.progress(
-                    0,
-                    text=f"正在生成 {shot['label']}（1/5 · 基準照片）…約需 30～60 秒"
-                )
-                result = generate_single_photo(api_key, shot, base_prompt, neg_prompt, scene_desc, ref_part)
-                # 如果第一張成功，將其作為後續照片的參考
-                if result.get("bytes"):
-                    hero_ref_part = types.Part.from_bytes(
-                        data=result["bytes"], mime_type="image/png"
+        if result.get("bytes"):
+            st.session_state.hero_image = result
+            st.session_state.hero_generated = True
+            st.session_state.remaining_generated = False
+            # 初始化 model_images（先放第一張）
+            st.session_state.model_images = [result]
+            st.session_state.model_image_bytes = result["bytes"]
+            # 儲存生成參數供 Step 3b 使用
+            st.session_state["_gen_params"] = {
+                "base_prompt": base_prompt,
+                "neg_prompt": neg_prompt,
+                "scene_desc": scene_desc,
+            }
+            st.success("✅ 基準照生成完成！確認滿意後，按下方按鈕生成其餘 4 張。")
+        else:
+            st.error(f"❌ 基準照生成失敗：{result.get('error', '未知錯誤')}")
+
+    # ── 顯示基準照 & Step 3b 按鈕 ──
+    if st.session_state.hero_generated and st.session_state.hero_image and st.session_state.hero_image.get("bytes"):
+        hero = st.session_state.hero_image
+        st.markdown("#### 📸 基準照預覽")
+        hero_img = Image.open(io.BytesIO(hero["bytes"]))
+        st.image(hero_img, caption=hero["label"], width=400)
+
+        if not st.session_state.remaining_generated:
+            if st.button("✅ 基準照 OK，生成其餘 4 張", type="primary", use_container_width=False):
+                params = st.session_state.get("_gen_params", {})
+                base_prompt = params.get("base_prompt", st.session_state.prompts.get("positive_en", ""))
+                neg_prompt = params.get("neg_prompt", st.session_state.prompts.get("negative_en", ""))
+                scene_desc = params.get("scene_desc", "")
+
+                ref_part = None
+                if uploaded_file:
+                    ref_part = types.Part.from_bytes(
+                        data=uploaded_file.getvalue(),
+                        mime_type=st.session_state.upload_mime or "image/jpeg"
                     )
-            else:
-                progress_bar.progress(
-                    idx / len(SHOT_CONFIGS),
-                    text=f"正在生成 {shot['label']}（{idx+1}/5 · 參考基準照片）…約需 30～60 秒"
-                )
-                result = generate_single_photo(
-                    api_key, shot, base_prompt, neg_prompt, scene_desc,
-                    ref_part, hero_ref_part=hero_ref_part,
-                )
-            generated_images.append(result)
 
-        progress_bar.progress(1.0, text="✅ 照片組生成完成！")
-        st.session_state.model_images = generated_images
-        # 向下相容：取第一張成功的圖片作為 model_image_bytes（給 Step 4 用）
-        for img in generated_images:
-            if img.get("bytes"):
-                st.session_state.model_image_bytes = img["bytes"]
-                break
-        st.success(f"✅ 成功生成 {sum(1 for i in generated_images if i.get('bytes'))} / 5 張照片！")
+                hero_ref_part = types.Part.from_bytes(
+                    data=hero["bytes"], mime_type="image/png"
+                )
+
+                remaining_images = []
+                progress_bar = st.progress(0, text="準備生成其餘照片…")
+
+                remaining_shots = SHOT_CONFIGS[1:]
+                for idx, shot in enumerate(remaining_shots):
+                    progress_bar.progress(
+                        idx / len(remaining_shots),
+                        text=f"正在生成 {shot['label']}（{idx+2}/5 · 參考基準照）…約需 30～60 秒"
+                    )
+                    result = generate_single_photo(
+                        api_key, shot, base_prompt, neg_prompt, scene_desc,
+                        ref_part, hero_ref_part=hero_ref_part,
+                    )
+                    remaining_images.append(result)
+
+                progress_bar.progress(1.0, text="✅ 照片組生成完成！")
+
+                # 合併所有照片
+                all_images = [st.session_state.hero_image] + remaining_images
+                st.session_state.model_images = all_images
+                st.session_state.remaining_generated = True
+                for img in all_images:
+                    if img.get("bytes"):
+                        st.session_state.model_image_bytes = img["bytes"]
+                        break
+                success_count = sum(1 for i in all_images if i.get("bytes"))
+                st.success(f"✅ 成功生成 {success_count} / 5 張照片！")
 
 # ── 個別重新生成處理 ──
 def _get_regen_params():
