@@ -1041,10 +1041,16 @@ else:
                         operation = client.operations.get(operation)
 
                     if operation.done and operation.response:
-                        progress.progress(1.0, text="✅ 影片生成完成！")
+                        progress.progress(1.0, text="✅ 影片生成完成！正在下載…")
                         generated_video = operation.response.generated_videos[0]
+                        # 下載影片到暫存檔再讀取 bytes
+                        import tempfile, os
+                        tmp_video_path = os.path.join(tempfile.gettempdir(), "veo_output.mp4")
                         client.files.download(file=generated_video.video)
-                        video_data = generated_video.video.read_bytes()
+                        generated_video.video.save(tmp_video_path)
+                        with open(tmp_video_path, "rb") as vf:
+                            video_data = vf.read()
+                        os.unlink(tmp_video_path)
                         st.session_state.video_bytes = video_data
                         st.success("✅ 穿搭短影音生成成功！（含 AI 自動配樂）")
                     else:
