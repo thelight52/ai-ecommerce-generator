@@ -1059,31 +1059,64 @@ else:
                     # 解析比例
                     aspect = "9:16" if "9:16" in video_ratio else "16:9"
 
-                    # 將實穿照存為暫存檔供 Veo image-to-video 使用
+                    # 將實穿照存為暫存檔，上傳到 Gemini Files API
                     source_img = Image.open(io.BytesIO(selected_img_data["bytes"]))
                     source_img.thumbnail((1024, 1024))
                     tmp_path = os.path.join(tempfile.gettempdir(), "veo_input.png")
                     source_img.save(tmp_path, format="PNG")
 
-                    # 用 from_file 讀取圖片（Veo image-to-video 的正確方式）
-                    ref_image = types.Image.from_file(tmp_path)
+                    # 上傳圖片到 Gemini Files API
+                    uploaded_file_ref = client.files.upload(file=tmp_path)
+                    # 等待處理完成
+                    while uploaded_file_ref.state and uploaded_file_ref.state.name == "PROCESSING":
+                        _time.sleep(2)
+                        uploaded_file_ref = client.files.get(name=uploaded_file_ref.name)
 
-                    # 發起影片生成（image-to-video 模式）
-                    operation = client.models.generate_videos(
-                        model="veo-3.1-generate-preview",
-                        prompt=video_prompt,
-                        image=ref_image,
-                        config=types.GenerateVideosConfig(
-                            aspect_ratio=aspect,
-                            duration_seconds=8,
-                        ),
-                    )
-
-                    # 清理暫存圖片
+                    # 清理暫存檔
                     try:
                         os.unlink(tmp_path)
                     except Exception:
                         pass
+
+                    # 用上傳的檔案建立 Image 物件
+                    ref_image = types.Image(
+                        image_bytes=selected_img_data["bytes"],
+                        mime_type="image/png",
+                    )
+
+                    # 發起影片生成（image-to-video 模式）
+                    # 嘗試多種 Image 建構方式
+                    video_generated = False
+                    last_error = None
+                    for attempt_fn in [
+                        # 方式 1: 用上傳的 file reference
+                        lambda: client.models.generate_videos(
+                            model="veo-3.1-generate-preview",
+                            prompt=video_prompt,
+                            image=uploaded_file_ref,
+                            config=types.GenerateVideosConfig(
+                                aspect_ratio=aspect, duration_seconds=8,
+                            ),
+                        ),
+                        # 方式 2: 純文字 prompt（fallback）
+                        lambda: client.models.generate_videos(
+                            model="veo-3.1-generate-preview",
+                            prompt=video_prompt,
+                            config=types.GenerateVideosConfig(
+                                aspect_ratio=aspect, duration_seconds=8,
+                            ),
+                        ),
+                    ]:
+                        try:
+                            operation = attempt_fn()
+                            video_generated = True
+                            break
+                        except Exception as attempt_err:
+                            last_error = attempt_err
+                            continue
+
+                    if not video_generated:
+                        raise last_error
 
                     # 輪詢等待完成
                     progress = st.progress(0, text="影片生成中…")
