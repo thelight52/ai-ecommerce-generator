@@ -1115,12 +1115,15 @@ else:
 
         video_prompt_default = (
             f"Animate this exact photo into a short video. "
-            f"The model in the image starts with gentle natural movement: "
-            f"slightly swinging her legs, tilting her head, adjusting her hair, or shifting her weight. "
-            f"Keep the EXACT SAME outfit, socks, shoes, hairstyle, and background as shown in the image. "
-            f"Camera: slow cinematic push-in or gentle pan, smooth and steady. "
+            f"CAMERA FRAMING: the camera MUST focus on the LOWER BODY — from the waist down to the feet. "
+            f"The socks and shoes must be the visual focal point throughout the entire video. "
+            f"Do NOT frame the face or upper body as the main subject. "
+            f"The model starts with gentle lower-body movement: slowly swinging her legs, shifting weight between feet, "
+            f"doing a small step or twirl to showcase the socks, or playfully tapping her toes. "
+            f"Camera: slow cinematic low-angle shot or close-up tracking the feet and legs, smooth and steady. "
+            f"Keep the EXACT SAME outfit, socks, shoes, and background as shown in the image. "
             f"Lighting stays consistent with the original photo. "
-            f"Style: Korean fashion editorial video, warm and trendy. "
+            f"Style: Korean fashion editorial video, warm and trendy, product-focused. "
             f"Background music: upbeat soft lo-fi or indie pop, cheerful mood matching the scene."
         )
 
