@@ -114,23 +114,27 @@ with st.sidebar:
         st.session_state.kling_sk_cache = env_kling_sk
 
     with st.expander("🎬 Kling AI Key（影片生成用）", expanded=False):
-        kling_ak = st.text_input(
+        kling_ak_input = st.text_input(
             "Access Key",
             type="password",
             value=st.session_state.kling_ak_cache,
             placeholder="ak-...",
             help="前往 https://kling.ai/dev 取得 API Key"
         )
-        kling_sk = st.text_input(
+        kling_sk_input = st.text_input(
             "Secret Key",
             type="password",
             value=st.session_state.kling_sk_cache,
             placeholder="sk-...",
         )
-        if kling_ak:
-            st.session_state.kling_ak_cache = kling_ak
-        if kling_sk:
-            st.session_state.kling_sk_cache = kling_sk
+        if kling_ak_input:
+            st.session_state.kling_ak_cache = kling_ak_input
+        if kling_sk_input:
+            st.session_state.kling_sk_cache = kling_sk_input
+
+    # 優先從 session cache 讀取（包含環境變數和手動輸入）
+    kling_ak = st.session_state.kling_ak_cache or env_kling_ak
+    kling_sk = st.session_state.kling_sk_cache or env_kling_sk
 
     if api_key and anthropic_key:
         st.markdown('<div class="success-box">✅ Gemini + Anthropic API Key 已設定</div>', unsafe_allow_html=True)
