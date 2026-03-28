@@ -537,10 +537,11 @@ FEET_POSES = [
     {
         "id": "G", "name": "雙腳前伸俯拍",
         "shot_desc": (
-            "CLOSE-UP of feet and lower legs ONLY, shot from ABOVE looking downward (first-person POV). "
-            "Model's legs extended forward on the ground, camera looking down at her own feet. "
-            "Both socks and shoes fully visible, ground texture visible around the feet. "
-            "Sharp focus on sock pattern and color. Casual selfie-style foot shot. "
+            "MANDATORY CAMERA ANGLE: directly overhead, top-down bird's-eye view, camera pointing straight down at the ground. "
+            "The viewer is looking DOWN at their OWN legs and feet stretched out in front of them — first-person selfie perspective. "
+            "COMPOSITION: two legs extending from bottom of frame toward top, feet at center-top of frame, "
+            "ground/floor surface fills the entire background. NO horizon line, NO side view, NO eye-level angle. "
+            "Both socks and shoes fully visible from above. Sharp focus on sock pattern and color. "
             "Correct foot anatomy: 5 toes, natural proportions, no deformation."
         ),
     },
