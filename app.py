@@ -1182,20 +1182,33 @@ else:
                         _time.sleep(10)
                         operation = client.operations.get(operation)
 
-                    if operation.done and operation.response:
-                        progress.progress(1.0, text="✅ 影片生成完成！正在下載…")
-                        generated_video = operation.response.generated_videos[0]
-                        # 下載影片到暫存檔再讀取 bytes
-                        tmp_video_path = os.path.join(tempfile.gettempdir(), "veo_output.mp4")
-                        client.files.download(file=generated_video.video)
-                        generated_video.video.save(tmp_video_path)
-                        with open(tmp_video_path, "rb") as vf:
-                            video_data = vf.read()
-                        os.unlink(tmp_video_path)
-                        st.session_state.video_bytes = video_data
-                        st.success("✅ 穿搭短影音生成成功！（含 AI 自動配樂）")
+                    if operation.done:
+                        if operation.response and operation.response.generated_videos:
+                            progress.progress(1.0, text="✅ 影片生成完成！正在下載…")
+                            generated_video = operation.response.generated_videos[0]
+                            # 下載影片到暫存檔再讀取 bytes
+                            tmp_video_path = os.path.join(tempfile.gettempdir(), "veo_output.mp4")
+                            client.files.download(file=generated_video.video)
+                            generated_video.video.save(tmp_video_path)
+                            with open(tmp_video_path, "rb") as vf:
+                                video_data = vf.read()
+                            os.unlink(tmp_video_path)
+                            st.session_state.video_bytes = video_data
+                            st.success("✅ 穿搭短影音生成成功！（含 AI 自動配樂）")
+                        else:
+                            # 顯示詳細的失敗原因
+                            err_details = []
+                            err_details.append(f"operation.done = {operation.done}")
+                            err_details.append(f"operation.response = {operation.response}")
+                            if hasattr(operation, 'error') and operation.error:
+                                err_details.append(f"operation.error = {operation.error}")
+                            if hasattr(operation, 'metadata') and operation.metadata:
+                                err_details.append(f"operation.metadata = {operation.metadata}")
+                            st.error("❌ 影片生成失敗（API 未回傳影片）")
+                            st.code("\n".join(err_details), language="text")
+                            st.info("💡 可能原因：圖片被安全過濾器擋住、API 配額不足、或模型暫時不可用。請換一張照片或稍後再試。")
                     else:
-                        st.error("❌ 影片生成超時或失敗，請稍後再試。")
+                        st.error("❌ 影片生成超時（已等待 10 分鐘），請稍後再試。")
 
                 except Exception as e:
                     import traceback
