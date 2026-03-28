@@ -454,10 +454,38 @@ def generate_single_photo(api_key_val, shot_config, base_prompt, neg_prompt, sce
             ),
         )
         image_bytes = None
-        for part in response.candidates[0].content.parts:
-            if hasattr(part, "inline_data") and part.inline_data:
-                image_bytes = part.inline_data.data
-                break
+        candidates = getattr(response, "candidates", None)
+        if candidates and len(candidates) > 0:
+            content = getattr(candidates[0], "content", None)
+            parts = getattr(content, "parts", None) if content else None
+            if parts:
+                for part in parts:
+                    if hasattr(part, "inline_data") and part.inline_data:
+                        image_bytes = part.inline_data.data
+                        break
+        if not image_bytes and hero_ref_part:
+            # 帶 hero 參考圖失敗時，重試一次不帶 hero（fallback）
+            content_parts_retry = []
+            if ref_part:
+                content_parts_retry.append(ref_part)
+            content_parts_retry.append(generation_prompt)
+            response2 = client.models.generate_content(
+                model="gemini-3.1-flash-image-preview",
+                contents=content_parts_retry,
+                config=types.GenerateContentConfig(
+                    response_modalities=["IMAGE", "TEXT"],
+                    image_config=types.ImageConfig(image_size="1K"),
+                ),
+            )
+            candidates2 = getattr(response2, "candidates", None)
+            if candidates2 and len(candidates2) > 0:
+                content2 = getattr(candidates2[0], "content", None)
+                parts2 = getattr(content2, "parts", None) if content2 else None
+                if parts2:
+                    for part in parts2:
+                        if hasattr(part, "inline_data") and part.inline_data:
+                            image_bytes = part.inline_data.data
+                            break
         if image_bytes:
             # 強制縮放到 1024×1024（API 可能忽略 image_size 參數）
             img = Image.open(io.BytesIO(image_bytes))
