@@ -1162,7 +1162,7 @@ else:
 
                     # 發起影片生成（image-to-video 模式）
                     operation = client.models.generate_videos(
-                        model="veo-3.1-generate-preview",
+                        model="veo-3.1-fast-generate-preview",
                         prompt=video_prompt,
                         image=ref_image,
                         config=types.GenerateVideosConfig(
