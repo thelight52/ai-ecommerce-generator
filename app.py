@@ -135,7 +135,7 @@ with st.sidebar:
 # ─────────────────────────────────────────
 # Session State 初始化
 # ─────────────────────────────────────────
-for key in ["prompts", "model_image_bytes", "model_images", "captions", "upload_mime", "selected_scene", "video_bytes", "video_generating", "hero_image", "hero_generated", "remaining_generated"]:
+for key in ["prompts", "model_image_bytes", "model_images", "captions", "upload_mime", "selected_scene", "video_bytes", "video_generating", "hero_image", "hero_generated", "remaining_generated", "selected_outfit", "outfit_desc_en"]:
     if key not in st.session_state:
         st.session_state[key] = None
 if "model_images" not in st.session_state or st.session_state.model_images is None:
@@ -243,6 +243,38 @@ else:
     selected_scene = st.selectbox("🏠 選擇場景", list(scene_options.keys()))
     st.session_state.selected_scene = selected_scene
 
+    # ── 穿搭風格選擇 ──
+    OUTFIT_STYLES = {
+        "T恤 + 百褶短裙（甜美韓系）": (
+            "wearing a soft pastel short-sleeve T-shirt tucked into a pleated mini skirt, "
+            "white canvas sneakers, sweet Korean girl-next-door style"
+        ),
+        "針織衫 + A字裙（溫柔氣質）": (
+            "wearing a delicate knit cardigan or short-sleeve knit top with an A-line midi skirt, "
+            "Mary Jane shoes or loafers, elegant and feminine Korean style"
+        ),
+        "衛衣 + 寬褲（休閒街頭）": (
+            "wearing an oversized cropped hoodie or sweatshirt with wide-leg pants or joggers, "
+            "chunky sneakers or platform shoes, casual Korean streetwear style"
+        ),
+        "襯衫 + 牛仔短褲（清新日常）": (
+            "wearing a crisp button-down shirt (tucked in or tied at waist) with denim shorts, "
+            "white sneakers or slip-on shoes, fresh and casual everyday Korean look"
+        ),
+        "背心洋裝（簡約一件式）": (
+            "wearing a sleeveless mini dress or pinafore dress over a simple inner top, "
+            "flat sandals or canvas shoes, minimalist one-piece Korean outfit"
+        ),
+        "運動套裝（活力元氣）": (
+            "wearing a sporty cropped zip-up jacket or sports bra top with bike shorts or track pants, "
+            "athletic running shoes, energetic Korean athleisure style"
+        ),
+    }
+    selected_outfit = st.selectbox("👗 穿搭風格", list(OUTFIT_STYLES.keys()), key="outfit_style")
+    outfit_desc_en = OUTFIT_STYLES[selected_outfit]
+    st.session_state.selected_outfit = selected_outfit
+    st.session_state.outfit_desc_en = outfit_desc_en
+
     # ── 襪子資訊欄位 ──
     col_sock1, col_sock2 = st.columns(2)
     with col_sock1:
@@ -290,12 +322,14 @@ Analyze this product flat lay image carefully and generate AI image generation p
 PRODUCT INFO (MUST appear in the generated prompts):
 - Sock type: {sock_info_en}{sock_length_desc}
 - Scene / Background: {scene_desc}
+- Outfit style: {outfit_desc_en}
 
 IMPORTANT RULES:
 - The generated positive_en prompt MUST explicitly contain these exact details:
   1. The sock type: "{sock_info_en}"
   2. The sock length: "{sock_length if sock_length else 'not specified'}" (include exact measurement if provided)
   3. The scene description keywords from: "{scene_desc}"
+  4. The outfit description: "{outfit_desc_en}"
 - Do NOT describe the specific pattern, color, or design details of the product itself (the reference image will be provided separately to the image generation model)
 - Focus on the MODEL SCENE: pose, angle, background, lighting, styling
 - The sock type is "{sock_info_en}" — make sure the pose and camera angle clearly showcase socks at the correct height on the leg
@@ -307,8 +341,8 @@ IMPORTANT RULES:
 
 Return ONLY a valid JSON object (no markdown, no extra text) with this exact structure:
 {{
-  "positive_en": "Korean female model, slim legs, wearing {sock_info_en}{sock_length_desc}, [pose details], lower body shot from waist down, [outfit pairing], {scene_desc}, [lighting], [photography quality]",
-  "positive_zh": "韓系女性模特兒，穿著{sock_type_zh}{sock_length_zh}，[姿勢細節]，腰部以下畫面，[服裝搭配]，[場景]，[光線]，[攝影質感]",
+  "positive_en": "Korean female model, slim legs, wearing {sock_info_en}{sock_length_desc}, {outfit_desc_en}, [pose details], lower body shot from waist down, {scene_desc}, [lighting], [photography quality]",
+  "positive_zh": "韓系女性模特兒，穿著{sock_type_zh}{sock_length_zh}，{selected_outfit}，[姿勢細節]，腰部以下畫面，[場景]，[光線]，[攝影質感]",
   "negative_en": "full body, face visible, upper body dominant, extra limbs, distorted feet, deformed toes, blurry, low quality, pixelated, watermark, text overlay, logo, jpeg artifacts, overexposed, dark shadows, plastic skin, unrealistic proportions, missing product, duplicate body parts, bad anatomy, extra fingers, nsfw, wrong sock length, barefoot"
 }}"""
 
@@ -628,35 +662,9 @@ else:
     if st.session_state.selected_scene:
         st.info(f"🏠 使用場景：**{st.session_state.selected_scene}**（可在 Step 2 更換）")
 
-    # ── 穿搭風格選擇 ──
-    OUTFIT_STYLES = {
-        "T恤 + 百褶短裙（甜美韓系）": (
-            "wearing a soft pastel short-sleeve T-shirt tucked into a pleated mini skirt, "
-            "white canvas sneakers, sweet Korean girl-next-door style"
-        ),
-        "針織衫 + A字裙（溫柔氣質）": (
-            "wearing a delicate knit cardigan or short-sleeve knit top with an A-line midi skirt, "
-            "Mary Jane shoes or loafers, elegant and feminine Korean style"
-        ),
-        "衛衣 + 寬褲（休閒街頭）": (
-            "wearing an oversized cropped hoodie or sweatshirt with wide-leg pants or joggers, "
-            "chunky sneakers or platform shoes, casual Korean streetwear style"
-        ),
-        "襯衫 + 牛仔短褲（清新日常）": (
-            "wearing a crisp button-down shirt (tucked in or tied at waist) with denim shorts, "
-            "white sneakers or slip-on shoes, fresh and casual everyday Korean look"
-        ),
-        "背心洋裝（簡約一件式）": (
-            "wearing a sleeveless mini dress or pinafore dress over a simple inner top, "
-            "flat sandals or canvas shoes, minimalist one-piece Korean outfit"
-        ),
-        "運動套裝（活力元氣）": (
-            "wearing a sporty cropped zip-up jacket or sports bra top with bike shorts or track pants, "
-            "athletic running shoes, energetic Korean athleisure style"
-        ),
-    }
-    selected_outfit = st.selectbox("👗 穿搭風格", list(OUTFIT_STYLES.keys()), key="outfit_style")
-    outfit_desc = OUTFIT_STYLES[selected_outfit]
+    # 顯示 Step 2 選擇的穿搭風格（唯讀提示）
+    if st.session_state.get("selected_outfit"):
+        st.info(f"👗 穿搭風格：**{st.session_state.selected_outfit}**（可在 Step 2 更換）")
 
     st.markdown("**Step 3a**: 先生成第 1 張基準照 → **Step 3b**: 確認後再生成其餘 4 張")
 
@@ -704,7 +712,7 @@ else:
         )
         scene_desc = random.choice(scene_variants)
 
-        base_prompt = st.session_state.prompts["positive_en"] + f", {outfit_desc}"
+        base_prompt = st.session_state.prompts["positive_en"] + f", {st.session_state.get('outfit_desc_en', '')}"
         neg_prompt = st.session_state.prompts["negative_en"]
 
         # 準備上傳的原始商品圖片
