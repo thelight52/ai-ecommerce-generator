@@ -1035,7 +1035,9 @@ else:
                         st.error("❌ 影片生成超時或失敗，請稍後再試。")
 
                 except Exception as e:
+                    import traceback
                     st.error(f"❌ 影片生成失敗：{e}")
+                    st.code(traceback.format_exc(), language="text")
                     st.markdown(
                         '<div class="info-box">💡 提示：Veo 3.1 影片生成需要付費 API Key。'
                         '請至 <a href="https://aistudio.google.com/apikey" target="_blank">AI Studio</a> 確認配額。</div>',
