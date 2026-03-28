@@ -105,8 +105,35 @@ with st.sidebar:
     if anthropic_key:
         st.session_state.anthropic_key_cache = anthropic_key
 
+    # Kling AI API Key（用於 Step 5 影片生成）
+    env_kling_ak = os.environ.get("KLING_ACCESS_KEY", "")
+    env_kling_sk = os.environ.get("KLING_SECRET_KEY", "")
+    if "kling_ak_cache" not in st.session_state:
+        st.session_state.kling_ak_cache = env_kling_ak
+    if "kling_sk_cache" not in st.session_state:
+        st.session_state.kling_sk_cache = env_kling_sk
+
+    with st.expander("🎬 Kling AI Key（影片生成用）", expanded=False):
+        kling_ak = st.text_input(
+            "Access Key",
+            type="password",
+            value=st.session_state.kling_ak_cache,
+            placeholder="ak-...",
+            help="前往 https://kling.ai/dev 取得 API Key"
+        )
+        kling_sk = st.text_input(
+            "Secret Key",
+            type="password",
+            value=st.session_state.kling_sk_cache,
+            placeholder="sk-...",
+        )
+        if kling_ak:
+            st.session_state.kling_ak_cache = kling_ak
+        if kling_sk:
+            st.session_state.kling_sk_cache = kling_sk
+
     if api_key and anthropic_key:
-        st.markdown('<div class="success-box">✅ 兩組 API Key 已設定</div>', unsafe_allow_html=True)
+        st.markdown('<div class="success-box">✅ Gemini + Anthropic API Key 已設定</div>', unsafe_allow_html=True)
     else:
         missing = []
         if not api_key: missing.append("Gemini")
@@ -1078,20 +1105,36 @@ if st.session_state.captions:
         )
 
 # ─────────────────────────────────────────
-# STEP 5：生成穿搭短影音
+# STEP 5：生成穿搭短影音（Kling 3.0）
 # ─────────────────────────────────────────
-st.markdown('<div class="step-header">Step 5 · 🎬 生成穿搭短影音（含配樂）</div>', unsafe_allow_html=True)
+st.markdown('<div class="step-header">Step 5 · 🎬 生成穿搭短影音（Kling 3.0）</div>', unsafe_allow_html=True)
+
+def _kling_jwt(ak, sk):
+    """生成 Kling AI JWT Token"""
+    import jwt as pyjwt
+    import time as _t
+    headers = {"alg": "HS256", "typ": "JWT"}
+    payload = {
+        "iss": ak,
+        "exp": int(_t.time()) + 1800,
+        "nbf": int(_t.time()) - 5,
+    }
+    return pyjwt.encode(payload, sk, algorithm="HS256", headers=headers)
 
 if not st.session_state.model_images:
     st.info("請先完成 Step 3 生成實穿照片組")
-elif not api_key:
-    st.warning("請先在左側 Sidebar 輸入 Gemini API Key")
+elif not kling_ak or not kling_sk:
+    st.warning("請先在左側 Sidebar 展開「🎬 Kling AI Key」輸入 Access Key 和 Secret Key")
+    st.markdown(
+        '<div class="info-box">💡 前往 <a href="https://kling.ai/dev" target="_blank">kling.ai/dev</a> 取得 API Key</div>',
+        unsafe_allow_html=True,
+    )
 else:
     successful_imgs = [i for i in st.session_state.model_images if i.get("bytes")]
     if not successful_imgs:
         st.warning("沒有可用的實穿照片，請先在 Step 3 生成")
     else:
-        st.markdown("從實穿照片中選擇一張作為影片的**起始畫面**，Veo 3.1 會自動生成動態影片並配上音樂。")
+        st.markdown("從實穿照片中選擇一張作為影片的**起始畫面**，Kling 3.0 會自動生成動態影片。")
 
         # 選擇起始照片
         img_labels = [img["label"] for img in successful_imgs]
@@ -1103,18 +1146,20 @@ else:
         st.image(preview_img, caption=f"起始畫面：{selected_img_label}", width=300)
 
         # 影片設定
-        col_ratio, col_res = st.columns(2)
+        col_ratio, col_dur = st.columns(2)
         with col_ratio:
-            video_ratio = st.selectbox("📐 影片比例", ["9:16（直式 Reels）", "16:9（橫式）"], key="video_ratio")
-        with col_res:
-            video_res = st.selectbox("🎞️ 解析度", ["720p（快速）", "1080p（高畫質）"], key="video_res")
+            video_ratio = st.selectbox("📐 影片比例", ["9:16（直式 Reels）", "16:9（橫式）", "1:1（正方形）"], key="video_ratio")
+        with col_dur:
+            video_duration = st.selectbox("⏱️ 影片長度", ["5 秒", "10 秒"], key="video_duration")
 
-        # 影片動態描述 — 用 Claude 根據實穿照自動生成精準的影片 prompt
-        scene_name = st.session_state.selected_scene or "未指定"
-        prompt_en = st.session_state.prompts.get("positive_en", "") if st.session_state.prompts else ""
+        col_mode, col_sound = st.columns(2)
+        with col_mode:
+            video_mode = st.selectbox("🎬 畫質模式", ["std（標準）", "pro（專業）"], key="video_mode")
+        with col_sound:
+            video_sound = st.selectbox("🔊 音效", ["on（開啟）", "off（關閉）"], key="video_sound")
 
+        # 影片動態描述
         video_prompt_default = (
-            f"Animate this exact photo into a short video. "
             f"CAMERA FRAMING: the camera MUST focus on the LOWER BODY — from the waist down to the feet. "
             f"The socks and shoes must be the visual focal point throughout the entire video. "
             f"Do NOT frame the face or upper body as the main subject. "
@@ -1122,9 +1167,7 @@ else:
             f"doing a small step or twirl to showcase the socks, or playfully tapping her toes. "
             f"Camera: slow cinematic low-angle shot or close-up tracking the feet and legs, smooth and steady. "
             f"Keep the EXACT SAME outfit, socks, shoes, and background as shown in the image. "
-            f"Lighting stays consistent with the original photo. "
-            f"Style: Korean fashion editorial video, warm and trendy, product-focused. "
-            f"Background music: upbeat soft lo-fi or indie pop, cheerful mood matching the scene."
+            f"Style: Korean fashion editorial video, warm and trendy, product-focused."
         )
 
         video_prompt = st.text_area(
@@ -1132,94 +1175,109 @@ else:
             value=video_prompt_default,
             height=120,
             key="video_prompt_input",
-            help="描述影片中模特兒的動作、鏡頭運動、氛圍和配樂風格。影片會以選擇的照片為起始畫面。"
+            help="描述影片中模特兒的動作、鏡頭運動、氛圍。影片會以選擇的照片為起始畫面。"
         )
 
-        if st.button("🎬 生成 8 秒穿搭短影音", type="primary", use_container_width=False):
-            with st.spinner("🎬 Veo 3.1 正在生成影片，約需 2～5 分鐘，請耐心等待…"):
+        if st.button("🎬 生成穿搭短影音", type="primary", use_container_width=False):
+            with st.spinner("🎬 Kling 3.0 正在生成影片，約需 2～5 分鐘，請耐心等待…"):
                 try:
                     import time as _time
-                    import tempfile, os
-                    client = genai.Client(api_key=api_key)
+                    import requests as _requests
 
-                    # 解析比例
-                    aspect = "9:16" if "9:16" in video_ratio else "16:9"
+                    # 解析設定
+                    aspect = "9:16" if "9:16" in video_ratio else ("1:1" if "1:1" in video_ratio else "16:9")
+                    duration = 5 if "5" in video_duration else 10
+                    mode = "std" if "std" in video_mode else "pro"
+                    sound = "on" if "on" in video_sound else "off"
 
-                    # 將實穿照存為暫存檔
-                    source_img = Image.open(io.BytesIO(selected_img_data["bytes"]))
-                    source_img.thumbnail((1024, 1024))
-                    tmp_path = os.path.join(tempfile.gettempdir(), "veo_input.png")
-                    source_img.save(tmp_path, format="PNG")
+                    # 將圖片轉為 Base64
+                    img_b64 = base64.standard_b64encode(selected_img_data["bytes"]).decode("utf-8")
 
-                    # 用 Image.from_file(location=path) 建立 Image 物件
-                    ref_image = types.Image.from_file(location=tmp_path)
+                    # 生成 JWT Token
+                    token = _kling_jwt(kling_ak, kling_sk)
 
-                    # 清理暫存檔
-                    try:
-                        os.unlink(tmp_path)
-                    except Exception:
-                        pass
-
-                    # 發起影片生成（image-to-video 模式）
-                    operation = client.models.generate_videos(
-                        model="veo-3.1-fast-generate-preview",
-                        prompt=video_prompt,
-                        image=ref_image,
-                        config=types.GenerateVideosConfig(
-                            aspect_ratio=aspect,
-                            duration_seconds=8,
-                        ),
+                    # 發起 image-to-video 任務
+                    KLING_BASE = "https://api-singapore.klingai.com"
+                    create_resp = _requests.post(
+                        f"{KLING_BASE}/v1/videos/image2video",
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model_name": "kling-v3",
+                            "mode": mode,
+                            "duration": str(duration),
+                            "aspect_ratio": aspect,
+                            "image": img_b64,
+                            "prompt": video_prompt,
+                            "sound": sound,
+                        },
+                        timeout=30,
                     )
+                    create_data = create_resp.json()
 
-                    # 輪詢等待完成
-                    progress = st.progress(0, text="影片生成中…")
-                    poll_count = 0
-                    max_polls = 60  # 最多等 10 分鐘
-
-                    while not operation.done and poll_count < max_polls:
-                        poll_count += 1
-                        progress.progress(
-                            min(poll_count / max_polls, 0.95),
-                            text=f"影片生成中… 已等待 {poll_count * 10} 秒"
-                        )
-                        _time.sleep(10)
-                        operation = client.operations.get(operation)
-
-                    if operation.done:
-                        if operation.response and operation.response.generated_videos:
-                            progress.progress(1.0, text="✅ 影片生成完成！正在下載…")
-                            generated_video = operation.response.generated_videos[0]
-                            # 下載影片到暫存檔再讀取 bytes
-                            tmp_video_path = os.path.join(tempfile.gettempdir(), "veo_output.mp4")
-                            client.files.download(file=generated_video.video)
-                            generated_video.video.save(tmp_video_path)
-                            with open(tmp_video_path, "rb") as vf:
-                                video_data = vf.read()
-                            os.unlink(tmp_video_path)
-                            st.session_state.video_bytes = video_data
-                            st.success("✅ 穿搭短影音生成成功！（含 AI 自動配樂）")
-                        else:
-                            # 顯示詳細的失敗原因
-                            err_details = []
-                            err_details.append(f"operation.done = {operation.done}")
-                            err_details.append(f"operation.response = {operation.response}")
-                            if hasattr(operation, 'error') and operation.error:
-                                err_details.append(f"operation.error = {operation.error}")
-                            if hasattr(operation, 'metadata') and operation.metadata:
-                                err_details.append(f"operation.metadata = {operation.metadata}")
-                            st.error("❌ 影片生成失敗（API 未回傳影片）")
-                            st.code("\n".join(err_details), language="text")
-                            st.info("💡 可能原因：圖片被安全過濾器擋住、API 配額不足、或模型暫時不可用。請換一張照片或稍後再試。")
+                    if create_data.get("code") != 0:
+                        st.error(f"❌ 任務建立失敗：{create_data.get('message', create_data)}")
                     else:
-                        st.error("❌ 影片生成超時（已等待 10 分鐘），請稍後再試。")
+                        task_id = create_data["data"]["task_id"]
+                        st.info(f"📋 任務已建立，Task ID: `{task_id}`")
+
+                        # 輪詢等待完成
+                        progress = st.progress(0, text="影片生成中…")
+                        poll_count = 0
+                        max_polls = 60  # 最多等 10 分鐘
+
+                        video_url = None
+                        while poll_count < max_polls:
+                            poll_count += 1
+                            progress.progress(
+                                min(poll_count / max_polls, 0.95),
+                                text=f"影片生成中… 已等待 {poll_count * 10} 秒"
+                            )
+                            _time.sleep(10)
+
+                            # 重新生成 token（避免過期）
+                            token = _kling_jwt(kling_ak, kling_sk)
+                            query_resp = _requests.get(
+                                f"{KLING_BASE}/v1/videos/image2video/{task_id}",
+                                headers={"Authorization": f"Bearer {token}"},
+                                timeout=30,
+                            )
+                            query_data = query_resp.json()
+
+                            if query_data.get("code") != 0:
+                                st.error(f"❌ 查詢失敗：{query_data.get('message', query_data)}")
+                                break
+
+                            task_status = query_data["data"]["task_status"]
+                            if task_status == "succeed":
+                                videos = query_data["data"].get("task_result", {}).get("videos", [])
+                                if videos:
+                                    video_url = videos[0].get("url")
+                                break
+                            elif task_status == "failed":
+                                fail_reason = query_data["data"].get("task_status_msg", "未知原因")
+                                st.error(f"❌ 影片生成失敗：{fail_reason}")
+                                break
+
+                        if video_url:
+                            progress.progress(1.0, text="✅ 影片生成完成！正在下載…")
+                            # 下載影片
+                            vid_resp = _requests.get(video_url, timeout=120)
+                            vid_resp.raise_for_status()
+                            st.session_state.video_bytes = vid_resp.content
+                            st.success(f"✅ 穿搭短影音生成成功！（Kling 3.0 · {mode} · {duration}s）")
+                        elif task_status != "failed":
+                            st.error("❌ 影片生成超時（已等待 10 分鐘），請稍後再試。")
 
                 except Exception as e:
                     import traceback
                     st.error(f"❌ 影片生成失敗：{e}")
                     st.code(traceback.format_exc(), language="text")
                     st.markdown(
-                        '<div class="info-box">💡 提示：Veo 3.1 影片生成需要付費 API Key。'
-                        '請至 <a href="https://aistudio.google.com/apikey" target="_blank">AI Studio</a> 確認配額。</div>',
+                        '<div class="info-box">💡 提示：請確認 Kling AI API Key 正確且有足夠配額。'
+                        '前往 <a href="https://kling.ai/dev" target="_blank">kling.ai/dev</a> 查看。</div>',
                         unsafe_allow_html=True,
                     )
 
