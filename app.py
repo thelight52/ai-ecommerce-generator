@@ -383,13 +383,31 @@ st.divider()
 # ─────────────────────────────────────────
 # 單張圖片生成函式（供批次生成 & 個別重新生成共用）
 # ─────────────────────────────────────────
-def generate_single_photo(api_key_val, shot_config, base_prompt, neg_prompt, scene_desc, ref_part):
-    """生成單張模特兒實穿照，回傳 dict: {label, bytes, error?}"""
+def generate_single_photo(api_key_val, shot_config, base_prompt, neg_prompt, scene_desc, ref_part, hero_ref_part=None):
+    """生成單張模特兒實穿照，回傳 dict: {label, bytes, error?}
+    hero_ref_part: 第一張照片的 Part 物件，供後續照片參考服裝/背景一致性
+    """
     client = genai.Client(api_key=api_key_val)
+
+    # 如果有第一張照片作為參考，加入一致性指令
+    consistency_block = ""
+    if hero_ref_part:
+        consistency_block = (
+            f"[VISUAL CONSISTENCY REFERENCE — HIGHEST PRIORITY]\n"
+            f"A 'hero reference photo' is attached (the second image). "
+            f"You MUST match the following elements from that hero photo EXACTLY:\n"
+            f"  • SAME outfit: identical top, skirt/shorts, shoes (color, style, material)\n"
+            f"  • SAME model appearance: same face, hair style, hair color, body type\n"
+            f"  • SAME background/scene: identical location, props, and lighting mood\n"
+            f"  • SAME color temperature and photography style\n"
+            f"The ONLY change is the POSE described below — everything else must be identical.\n\n"
+        )
+
     generation_prompt = (
         f"[CRITICAL INSTRUCTION - MUST FOLLOW EXACTLY]\n"
         f"Using the sock/stocking design shown in the reference image, "
         f"generate a photorealistic e-commerce model photo.\n\n"
+        f"{consistency_block}"
         f"[SHOT TYPE - THIS IS THE MOST IMPORTANT REQUIREMENT]\n"
         f"{shot_config['shot_desc']}\n\n"
         f"[SCENE & STYLE]\n"
@@ -419,6 +437,9 @@ def generate_single_photo(api_key_val, shot_config, base_prompt, neg_prompt, sce
     content_parts = []
     if ref_part:
         content_parts.append(ref_part)
+    # 附上第一張照片作為視覺一致性參考
+    if hero_ref_part:
+        content_parts.append(hero_ref_part)
     content_parts.append(generation_prompt)
 
     try:
@@ -637,13 +658,29 @@ else:
 
         generated_images = []
         progress_bar = st.progress(0, text="準備生成照片組…")
+        hero_ref_part = None  # 第一張照片的參考 Part
 
         for idx, shot in enumerate(SHOT_CONFIGS):
-            progress_bar.progress(
-                (idx) / len(SHOT_CONFIGS),
-                text=f"正在生成 {shot['label']}（{idx+1}/5）…約需 30～60 秒"
-            )
-            result = generate_single_photo(api_key, shot, base_prompt, neg_prompt, scene_desc, ref_part)
+            if idx == 0:
+                progress_bar.progress(
+                    0,
+                    text=f"正在生成 {shot['label']}（1/5 · 基準照片）…約需 30～60 秒"
+                )
+                result = generate_single_photo(api_key, shot, base_prompt, neg_prompt, scene_desc, ref_part)
+                # 如果第一張成功，將其作為後續照片的參考
+                if result.get("bytes"):
+                    hero_ref_part = types.Part.from_bytes(
+                        data=result["bytes"], mime_type="image/png"
+                    )
+            else:
+                progress_bar.progress(
+                    idx / len(SHOT_CONFIGS),
+                    text=f"正在生成 {shot['label']}（{idx+1}/5 · 參考基準照片）…約需 30～60 秒"
+                )
+                result = generate_single_photo(
+                    api_key, shot, base_prompt, neg_prompt, scene_desc,
+                    ref_part, hero_ref_part=hero_ref_part,
+                )
             generated_images.append(result)
 
         progress_bar.progress(1.0, text="✅ 照片組生成完成！")
