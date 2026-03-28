@@ -1026,70 +1026,64 @@ else:
         with col_res:
             video_res = st.selectbox("🎞️ 解析度", ["720p（快速）", "1080p（高畫質）"], key="video_res")
 
-        # 影片動態描述
+        # 影片動態描述 — 用 Claude 根據實穿照自動生成精準的影片 prompt
         scene_name = st.session_state.selected_scene or "未指定"
         prompt_en = st.session_state.prompts.get("positive_en", "") if st.session_state.prompts else ""
 
         video_prompt_default = (
-            f"A Korean female model in a stylish outfit with cute patterned socks, "
-            f"natural gentle movement like walking, turning, or adjusting her skirt. "
-            f"Scene: {scene_name}. Smooth cinematic camera motion, warm natural lighting, "
-            f"Korean fashion editorial video quality. "
-            f"Background music: upbeat soft lo-fi or indie pop, cheerful and trendy mood."
+            f"Animate this exact photo into a short video. "
+            f"The model in the image starts with gentle natural movement: "
+            f"slightly swinging her legs, tilting her head, adjusting her hair, or shifting her weight. "
+            f"Keep the EXACT SAME outfit, socks, shoes, hairstyle, and background as shown in the image. "
+            f"Camera: slow cinematic push-in or gentle pan, smooth and steady. "
+            f"Lighting stays consistent with the original photo. "
+            f"Style: Korean fashion editorial video, warm and trendy. "
+            f"Background music: upbeat soft lo-fi or indie pop, cheerful mood matching the scene."
         )
 
         video_prompt = st.text_area(
             "🎬 影片動態描述（可自訂）",
             value=video_prompt_default,
-            height=100,
+            height=120,
             key="video_prompt_input",
-            help="描述影片中模特兒的動作、鏡頭運動、氛圍和配樂風格"
+            help="描述影片中模特兒的動作、鏡頭運動、氛圍和配樂風格。影片會以選擇的照片為起始畫面。"
         )
 
         if st.button("🎬 生成 8 秒穿搭短影音", type="primary", use_container_width=False):
             with st.spinner("🎬 Veo 3.1 正在生成影片，約需 2～5 分鐘，請耐心等待…"):
                 try:
                     import time as _time
+                    import tempfile, os
                     client = genai.Client(api_key=api_key)
 
                     # 解析比例
                     aspect = "9:16" if "9:16" in video_ratio else "16:9"
 
-                    # 嘗試上傳起始圖片供 Veo 參考
-                    ref_image = None
-                    try:
-                        import tempfile, os
-                        source_img = Image.open(io.BytesIO(selected_img_data["bytes"]))
-                        # 縮小圖片至合理尺寸避免上傳過大
-                        source_img.thumbnail((1024, 1024))
-                        tmp_path = os.path.join(tempfile.gettempdir(), "veo_input.png")
-                        source_img.save(tmp_path, format="PNG")
-                        # 用 files.upload 上傳圖片到 Gemini
-                        uploaded_ref = client.files.upload(file=tmp_path)
-                        # 等待檔案處理完成
-                        while uploaded_ref.state.name == "PROCESSING":
-                            _time.sleep(2)
-                            uploaded_ref = client.files.get(name=uploaded_ref.name)
-                        if uploaded_ref.state.name == "ACTIVE":
-                            ref_image = types.Image(image=uploaded_ref)
-                        os.unlink(tmp_path)
-                    except Exception as img_err:
-                        st.warning(f"⚠️ 圖片上傳略過，改用純文字生成影片：{img_err}")
-                        ref_image = None
+                    # 將實穿照存為暫存檔供 Veo image-to-video 使用
+                    source_img = Image.open(io.BytesIO(selected_img_data["bytes"]))
+                    source_img.thumbnail((1024, 1024))
+                    tmp_path = os.path.join(tempfile.gettempdir(), "veo_input.png")
+                    source_img.save(tmp_path, format="PNG")
 
-                    # 發起影片生成
-                    gen_kwargs = {
-                        "model": "veo-3.1-generate-preview",
-                        "prompt": video_prompt,
-                        "config": types.GenerateVideosConfig(
+                    # 用 from_file 讀取圖片（Veo image-to-video 的正確方式）
+                    ref_image = types.Image.from_file(tmp_path)
+
+                    # 發起影片生成（image-to-video 模式）
+                    operation = client.models.generate_videos(
+                        model="veo-3.1-generate-preview",
+                        prompt=video_prompt,
+                        image=ref_image,
+                        config=types.GenerateVideosConfig(
                             aspect_ratio=aspect,
                             duration_seconds=8,
                         ),
-                    }
-                    if ref_image is not None:
-                        gen_kwargs["image"] = ref_image
+                    )
 
-                    operation = client.models.generate_videos(**gen_kwargs)
+                    # 清理暫存圖片
+                    try:
+                        os.unlink(tmp_path)
+                    except Exception:
+                        pass
 
                     # 輪詢等待完成
                     progress = st.progress(0, text="影片生成中…")
@@ -1109,7 +1103,6 @@ else:
                         progress.progress(1.0, text="✅ 影片生成完成！正在下載…")
                         generated_video = operation.response.generated_videos[0]
                         # 下載影片到暫存檔再讀取 bytes
-                        import tempfile, os
                         tmp_video_path = os.path.join(tempfile.gettempdir(), "veo_output.mp4")
                         client.files.download(file=generated_video.video)
                         generated_video.video.save(tmp_video_path)
