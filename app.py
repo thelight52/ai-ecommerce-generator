@@ -825,6 +825,15 @@ FULLBODY_POSES = [
             "Korean young woman, long hair. Complete outfit visible: clothing, socks, and shoes."
         ),
     },
+    {
+        "id": "I", "name": "活力前傾站姿",
+        "shot_desc": (
+            "FULL BODY photo from head to shoes. "
+            "Model standing with a slight forward lean, one hand casually gripping a metal railing or fence, body tilted playfully forward, legs slightly apart showing socks clearly, energetic and dynamic full-body shot, natural outdoor playground or park setting. "
+            "FACE FULLY VISIBLE: bright smile, looking at camera, natural light makeup. "
+            "Korean young woman, long hair. Complete outfit visible: clothing, socks, and shoes."
+        ),
+    },
 ]
 
 # 下半身動作池（B / F / H）
@@ -856,6 +865,30 @@ LOWERBODY_POSES = [
             "Model squatting or crouching on a low wall, stone, or curb, arms wrapped around knees (only hands visible). "
             "Camera at ground level, shooting straight at the feet and socks. "
             "Socks prominent and centered in composition. "
+            "Correct anatomy: 5 toes per foot, natural proportions."
+        ),
+    },
+    {
+        "id": "J", "name": "坐地持球",
+        "shot_desc": (
+            "LOWER BODY ONLY from waist down. NO face, NO chest visible. "
+            "Model sitting on the ground holding a basketball with one hand, knees slightly bent, lower body close-up shot from a low angle, socks clearly visible on both feet, sporty casual vibe, outdoor basketball court setting. "
+            "Correct anatomy: 5 toes per foot, natural proportions."
+        ),
+    },
+    {
+        "id": "K", "name": "側躺伸腿",
+        "shot_desc": (
+            "LOWER BODY ONLY from waist down. NO face, NO chest visible. "
+            "Model half-reclining on the ground leaning on one arm, legs extended and slightly crossed, lower body close-up shot, side view of socks clearly showing pattern details, relaxed laid-back pose, outdoor ground-level perspective. "
+            "Correct anatomy: 5 toes per foot, natural proportions."
+        ),
+    },
+    {
+        "id": "L", "name": "高台翹腳",
+        "shot_desc": (
+            "LOWER BODY ONLY from waist down. NO face, NO chest visible. "
+            "Model sitting on an elevated ledge or concrete bench with legs crossed (one leg over the other), lower body close-up shot, hands resting on knee, sock pattern prominently displayed on the front-facing foot, clean minimalist background with natural shadows. "
             "Correct anatomy: 5 toes per foot, natural proportions."
         ),
     },
