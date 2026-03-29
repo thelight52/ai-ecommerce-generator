@@ -16,6 +16,57 @@ import json
 import os
 import random
 import pathlib
+import time as _time
+
+# ─────────────────────────────────────────
+# 場景描述設定（統一管理，Step 2/3 共用）
+# ─────────────────────────────────────────
+SCENE_CONFIG = {
+    "簡約室內（白色大理石地板）": [
+        "indoor setting with white marble floor, clean minimal Scandinavian interior, soft natural window light, warm white tones, potted green plants as accents",
+        "bright minimalist room with white marble tiles, sheer curtain diffused sunlight, light wood furniture, airy and clean atmosphere",
+    ],
+    "咖啡廳外拍（暖陽散景）": [
+        "outdoor European-style cafe terrace, warm golden afternoon sunlight, blurred bokeh of cafe umbrellas and greenery, vintage rattan chairs, cobblestone ground",
+        "cozy sidewalk cafe with string lights, late afternoon golden hour glow, espresso cup on table as prop, warm film photography tones with gentle lens flare",
+    ],
+    "清爽白背景（電商主圖）": [
+        "pure white studio cyclorama background, soft diffused studio lighting from above, bright and airy atmosphere, clean e-commerce hero shot",
+        "seamless white backdrop with subtle shadow on floor, rim lighting from behind, professional product photography studio setup",
+    ],
+    "日系街道散步（清新文青）": [
+        "quiet Japanese-style narrow alley with old wooden houses, dappled sunlight through leaves, a bicycle leaning on the wall, soft pastel color palette, Fuji film aesthetic",
+        "charming Japanese shopping street with small potted plants lining the path, morning soft light, vintage signboards, gentle nostalgic atmosphere",
+    ],
+    "校園青春（活力陽光）": [
+        "university campus green lawn with large trees, bright midday sunlight, red brick building in background, youthful energetic atmosphere, clear blue sky",
+        "school courtyard with wooden bench and scattered autumn leaves, warm afternoon light through campus trees, cheerful and vibrant student life atmosphere",
+    ],
+    "都市街拍（時尚潮流）": [
+        "urban city street with modern glass buildings, crosswalk and traffic blur in background, overcast diffused light, street fashion editorial style, concrete and steel tones",
+        "trendy neighborhood with colorful murals and graffiti wall, neon sign reflections on wet pavement after rain, edgy metropolitan vibe, high contrast cinematic look",
+    ],
+    "公園遊樂場（可愛活潑）": [
+        "colorful children's playground in a sunny park, bright yellow slide and climbing frame in background, soft green rubber mat ground, vivid primary color play equipment, cheerful and playful atmosphere, warm natural sunlight, youthful and energetic mood",
+        "outdoor playground with swings and rope climbing net, colorful plastic play structures, green grass and rubber safety surface, bright midday sun with clear blue sky, fun and lively atmosphere, candy-colored background tones",
+    ],
+}
+
+# ─────────────────────────────────────────
+# API 重試包裝函式（最多 3 次，指數退避）
+# ─────────────────────────────────────────
+def retry_api_call(fn, *args, max_retries=3, base_delay=2, **kwargs):
+    """呼叫 fn(*args, **kwargs)，失敗時最多重試 max_retries 次（指數退避），並在 UI 顯示重試狀態"""
+    for attempt in range(max_retries):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:
+            if attempt < max_retries - 1:
+                delay = base_delay * (2 ** attempt)
+                st.warning(f"⚠️ API 呼叫失敗（第 {attempt + 1} 次），{delay} 秒後重試… 錯誤：{e}")
+                _time.sleep(delay)
+            else:
+                raise
 
 # ─────────────────────────────────────────
 # 頁面設定
@@ -187,10 +238,11 @@ st.markdown('<div class="step-header">Step 1 · 🖼️ 上傳商品平拍照</d
 # 範例圖片檔案路徑
 SAMPLE_IMAGE_PATH = pathlib.Path(__file__).parent / "test_product.jpg"
 
-uploaded_file = st.file_uploader(
-    "選擇商品平拍圖片（支援 JPG / PNG / WEBP）",
+uploaded_files = st.file_uploader(
+    "選擇商品平拍圖片（支援 JPG / PNG / WEBP，可多選）",
     type=["jpg", "jpeg", "png", "webp"],
-    help="建議使用清晰、白底或淺色背景的商品平拍照"
+    accept_multiple_files=True,
+    help="建議使用清晰、白底或淺色背景的商品平拍照；可一次上傳多張，再用下方選擇器挑選要處理的一張"
 )
 
 # MockUploadedFile：模擬 Streamlit UploadedFile 介面
@@ -203,6 +255,26 @@ class _MockFile:
     def read(self): return self._data
     def getvalue(self): return self._data
     def seek(self, pos): pass
+
+uploaded_file = None
+
+# 多張上傳：縮圖網格 + radio 選擇
+if uploaded_files:
+    if len(uploaded_files) > 1:
+        st.markdown(f"**已上傳 {len(uploaded_files)} 張圖片，請選擇要處理的一張：**")
+        thumb_cols = st.columns(min(len(uploaded_files), 4))
+        for i, f in enumerate(uploaded_files):
+            with thumb_cols[i % 4]:
+                st.image(f.getvalue(), caption=f.name, use_container_width=True)
+        selected_name = st.radio(
+            "選擇圖片",
+            [f.name for f in uploaded_files],
+            horizontal=True,
+            label_visibility="collapsed",
+        )
+        uploaded_file = next(f for f in uploaded_files if f.name == selected_name)
+    else:
+        uploaded_file = uploaded_files[0]
 
 # 若未上傳，提供範例圖片按鈕
 if not uploaded_file:
@@ -221,9 +293,9 @@ if uploaded_file:
     st.session_state.upload_mime = uploaded_file.type or "image/jpeg"
     col_img, col_info = st.columns([1, 2])
     with col_img:
-        st.image(uploaded_file.getvalue(), caption="📸 已上傳的平拍照", use_container_width=True)
+        st.image(uploaded_file.getvalue(), caption="📸 已選擇的圖片", use_container_width=True)
     with col_info:
-        st.markdown('<div class="success-box">✅ 圖片上傳成功，可繼續下一步</div>', unsafe_allow_html=True)
+        st.markdown('<div class="success-box">✅ 圖片已選擇，可繼續下一步</div>', unsafe_allow_html=True)
         st.markdown(f"- **檔名**：`{uploaded_file.name}`")
         st.markdown(f"- **大小**：`{uploaded_file.size / 1024:.1f} KB`")
         st.markdown(f"- **格式**：`{uploaded_file.type}`")
@@ -241,36 +313,7 @@ elif not anthropic_key:
     st.warning("請先在左側 Sidebar 輸入 Anthropic API Key")
 else:
     # ── 場景選擇（7 種場景，每種有 2 組隨機腳本） ──
-    scene_options = {
-        "簡約室內（白色大理石地板）": [
-            "indoor setting with white marble floor, clean minimal Scandinavian interior, soft natural window light, warm white tones, potted green plants as accents",
-            "bright minimalist room with white marble tiles, sheer curtain diffused sunlight, light wood furniture, airy and clean atmosphere",
-        ],
-        "咖啡廳外拍（暖陽散景）": [
-            "outdoor European-style cafe terrace, warm golden afternoon sunlight, blurred bokeh of cafe umbrellas and greenery, vintage rattan chairs, cobblestone ground",
-            "cozy sidewalk cafe with string lights, late afternoon golden hour glow, espresso cup on table as prop, warm film photography tones with gentle lens flare",
-        ],
-        "清爽白背景（電商主圖）": [
-            "pure white studio cyclorama background, soft diffused studio lighting from above, bright and airy atmosphere, clean e-commerce hero shot",
-            "seamless white backdrop with subtle shadow on floor, rim lighting from behind, professional product photography studio setup",
-        ],
-        "日系街道散步（清新文青）": [
-            "quiet Japanese-style narrow alley with old wooden houses, dappled sunlight through leaves, a bicycle leaning on the wall, soft pastel color palette, Fuji film aesthetic",
-            "charming Japanese shopping street with small potted plants lining the path, morning soft light, vintage signboards, gentle nostalgic atmosphere",
-        ],
-        "校園青春（活力陽光）": [
-            "university campus green lawn with large trees, bright midday sunlight, red brick building in background, youthful energetic atmosphere, clear blue sky",
-            "school courtyard with wooden bench and scattered autumn leaves, warm afternoon light through campus trees, cheerful and vibrant student life atmosphere",
-        ],
-        "都市街拍（時尚潮流）": [
-            "urban city street with modern glass buildings, crosswalk and traffic blur in background, overcast diffused light, street fashion editorial style, concrete and steel tones",
-            "trendy neighborhood with colorful murals and graffiti wall, neon sign reflections on wet pavement after rain, edgy metropolitan vibe, high contrast cinematic look",
-        ],
-        "公園遊樂場（可愛活潑）": [
-            "colorful children's playground in a sunny park, bright yellow slide and climbing frame in background, soft green rubber mat ground, vivid primary color play equipment, cheerful and playful atmosphere, warm natural sunlight, youthful and energetic mood",
-            "outdoor playground with swings and rope climbing net, colorful plastic play structures, green grass and rubber safety surface, bright midday sun with clear blue sky, fun and lively atmosphere, candy-colored background tones",
-        ],
-    }
+    scene_options = SCENE_CONFIG
     selected_scene = st.selectbox("🏠 選擇場景", list(scene_options.keys()))
     st.session_state.selected_scene = selected_scene
 
@@ -377,7 +420,8 @@ Return ONLY a valid JSON object (no markdown, no extra text) with this exact str
   "negative_en": "full body, face visible, upper body dominant, extra limbs, distorted feet, deformed toes, blurry, low quality, pixelated, watermark, text overlay, logo, jpeg artifacts, overexposed, dark shadows, plastic skin, unrealistic proportions, missing product, duplicate body parts, bad anatomy, extra fingers, nsfw, wrong sock length, barefoot"
 }}"""
 
-                response = claude_client.messages.create(
+                response = retry_api_call(
+                    claude_client.messages.create,
                     model="claude-sonnet-4-6",
                     max_tokens=1024,
                     messages=[{
@@ -508,7 +552,8 @@ def generate_single_photo(api_key_val, shot_config, base_prompt, neg_prompt, sce
     content_parts.append(generation_prompt)
 
     try:
-        response = client.models.generate_content(
+        response = retry_api_call(
+            client.models.generate_content,
             model="gemini-3.1-flash-image-preview",
             contents=content_parts,
             config=types.GenerateContentConfig(
@@ -534,7 +579,8 @@ def generate_single_photo(api_key_val, shot_config, base_prompt, neg_prompt, sce
             if ref_part:
                 content_parts_retry.append(ref_part)
             content_parts_retry.append(generation_prompt)
-            response2 = client.models.generate_content(
+            response2 = retry_api_call(
+                client.models.generate_content,
                 model="gemini-3.1-flash-image-preview",
                 contents=content_parts_retry,
                 config=types.GenerateContentConfig(
@@ -707,37 +753,7 @@ else:
         client = genai.Client(api_key=api_key)
 
         # 從 Step 2 取場景描述（每場景隨機選 1 組腳本）
-        scene_options_map = {
-            "簡約室內（白色大理石地板）": [
-                "indoor setting with white marble floor, clean minimal Scandinavian interior, soft natural window light, warm white tones, potted green plants as accents",
-                "bright minimalist room with white marble tiles, sheer curtain diffused sunlight, light wood furniture, airy and clean atmosphere",
-            ],
-            "咖啡廳外拍（暖陽散景）": [
-                "outdoor European-style cafe terrace, warm golden afternoon sunlight, blurred bokeh of cafe umbrellas and greenery, vintage rattan chairs, cobblestone ground",
-                "cozy sidewalk cafe with string lights, late afternoon golden hour glow, espresso cup on table as prop, warm film photography tones with gentle lens flare",
-            ],
-            "清爽白背景（電商主圖）": [
-                "pure white studio cyclorama background, soft diffused studio lighting from above, bright and airy atmosphere, clean e-commerce hero shot",
-                "seamless white backdrop with subtle shadow on floor, rim lighting from behind, professional product photography studio setup",
-            ],
-            "日系街道散步（清新文青）": [
-                "quiet Japanese-style narrow alley with old wooden houses, dappled sunlight through leaves, a bicycle leaning on the wall, soft pastel color palette, Fuji film aesthetic",
-                "charming Japanese shopping street with small potted plants lining the path, morning soft light, vintage signboards, gentle nostalgic atmosphere",
-            ],
-            "校園青春（活力陽光）": [
-                "university campus green lawn with large trees, bright midday sunlight, red brick building in background, youthful energetic atmosphere, clear blue sky",
-                "school courtyard with wooden bench and scattered autumn leaves, warm afternoon light through campus trees, cheerful and vibrant student life atmosphere",
-            ],
-            "都市街拍（時尚潮流）": [
-                "urban city street with modern glass buildings, crosswalk and traffic blur in background, overcast diffused light, street fashion editorial style, concrete and steel tones",
-                "trendy neighborhood with colorful murals and graffiti wall, neon sign reflections on wet pavement after rain, edgy metropolitan vibe, high contrast cinematic look",
-            ],
-            "公園遊樂場（可愛活潑）": [
-                "colorful children's playground in a sunny park, bright yellow slide and climbing frame in background, soft green rubber mat ground, vivid primary color play equipment, cheerful and playful atmosphere, warm natural sunlight, youthful and energetic mood",
-                "outdoor playground with swings and rope climbing net, colorful plastic play structures, green grass and rubber safety surface, bright midday sun with clear blue sky, fun and lively atmosphere, candy-colored background tones",
-            ],
-        }
-        scene_variants = scene_options_map.get(
+        scene_variants = SCENE_CONFIG.get(
             st.session_state.selected_scene or "清爽白背景（電商主圖）",
             ["pure white studio background, soft diffused studio lighting"]
         )
@@ -831,37 +847,7 @@ else:
 # ── 個別重新生成處理 ──
 def _get_regen_params():
     """取得重新生成所需的共用參數"""
-    scene_options_map = {
-        "簡約室內（白色大理石地板）": [
-            "indoor setting with white marble floor, clean minimal Scandinavian interior, soft natural window light, warm white tones, potted green plants as accents",
-            "bright minimalist room with white marble tiles, sheer curtain diffused sunlight, light wood furniture, airy and clean atmosphere",
-        ],
-        "咖啡廳外拍（暖陽散景）": [
-            "outdoor European-style cafe terrace, warm golden afternoon sunlight, blurred bokeh of cafe umbrellas and greenery, vintage rattan chairs, cobblestone ground",
-            "cozy sidewalk cafe with string lights, late afternoon golden hour glow, espresso cup on table as prop, warm film photography tones with gentle lens flare",
-        ],
-        "清爽白背景（電商主圖）": [
-            "pure white studio cyclorama background, soft diffused studio lighting from above, bright and airy atmosphere, clean e-commerce hero shot",
-            "seamless white backdrop with subtle shadow on floor, rim lighting from behind, professional product photography studio setup",
-        ],
-        "日系街道散步（清新文青）": [
-            "quiet Japanese-style narrow alley with old wooden houses, dappled sunlight through leaves, a bicycle leaning on the wall, soft pastel color palette, Fuji film aesthetic",
-            "charming Japanese shopping street with small potted plants lining the path, morning soft light, vintage signboards, gentle nostalgic atmosphere",
-        ],
-        "校園青春（活力陽光）": [
-            "university campus green lawn with large trees, bright midday sunlight, red brick building in background, youthful energetic atmosphere, clear blue sky",
-            "school courtyard with wooden bench and scattered autumn leaves, warm afternoon light through campus trees, cheerful and vibrant student life atmosphere",
-        ],
-        "都市街拍（時尚潮流）": [
-            "urban city street with modern glass buildings, crosswalk and traffic blur in background, overcast diffused light, street fashion editorial style, concrete and steel tones",
-            "trendy neighborhood with colorful murals and graffiti wall, neon sign reflections on wet pavement after rain, edgy metropolitan vibe, high contrast cinematic look",
-        ],
-        "公園遊樂場（可愛活潑）": [
-            "colorful children's playground in a sunny park, bright yellow slide and climbing frame in background, soft green rubber mat ground, vivid primary color play equipment, cheerful and playful atmosphere, warm natural sunlight, youthful and energetic mood",
-            "outdoor playground with swings and rope climbing net, colorful plastic play structures, green grass and rubber safety surface, bright midday sun with clear blue sky, fun and lively atmosphere, candy-colored background tones",
-        ],
-    }
-    scene_variants = scene_options_map.get(
+    scene_variants = SCENE_CONFIG.get(
         st.session_state.selected_scene or "清爽白背景（電商主圖）",
         ["pure white studio background, soft diffused studio lighting"]
     )
@@ -1074,7 +1060,8 @@ else:
                     })
                 message_content.append({"type": "text", "text": caption_prompt})
 
-                response = claude_client.messages.create(
+                response = retry_api_call(
+                    claude_client.messages.create,
                     model="claude-sonnet-4-6",
                     max_tokens=2048,
                     messages=[{"role": "user", "content": message_content}],
