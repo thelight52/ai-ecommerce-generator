@@ -782,14 +782,13 @@ FEET_POSES = [
         ),
     },
     {
-        "id": "G", "name": "雙腳前伸俯拍",
+        "id": "G", "name": "屈膝坐姿側面",
         "shot_desc": (
-            "MANDATORY CAMERA ANGLE: directly overhead, top-down bird's-eye view, camera pointing straight down at the ground. "
-            "The viewer is looking DOWN at their OWN legs and feet stretched out in front of them — first-person selfie perspective. "
-            "COMPOSITION: two legs extending from bottom of frame toward top, feet at center-top of frame, "
-            "ground/floor surface fills the entire background. NO horizon line, NO side view, NO eye-level angle. "
-            "Both socks and shoes fully visible from above. Sharp focus on sock pattern and color. "
-            "Correct foot anatomy: 5 toes, natural proportions, no deformation."
+            "Model sitting on the ground with knees bent and drawn up toward chest, arms gently wrapped around knees (hands clasped or resting on shins). "
+            "Shot from a slight side angle (approximately 45 degrees) to clearly showcase the sock's side pattern and design details. "
+            "Full body visible from head to toe. Relaxed, casual pose with natural posture. "
+            "Sock side profile prominently displayed — pattern, color bands, and texture clearly visible. "
+            "Outdoor setting, natural lighting. Correct anatomy throughout."
         ),
     },
 ]
@@ -805,7 +804,7 @@ def build_shot_configs():
         {"label": f"📷 全身照 ②（{full[1]['name']}）", "shot_desc": full[1]["shot_desc"]},
         {"label": f"🦵 下半身特寫 ①（{lower[0]['name']}）", "shot_desc": lower[0]["shot_desc"]},
         {"label": f"🦵 下半身特寫 ②（{lower[1]['name']}）", "shot_desc": lower[1]["shot_desc"]},
-        {"label": f"🦶 腳部特寫（{feet[0]['name']}）", "shot_desc": feet[0]["shot_desc"]},
+        {"label": f"🧎 屈膝坐姿（{feet[0]['name']}）", "shot_desc": feet[0]["shot_desc"]},
     ]
 
 # 初始化或使用已生成的 SHOT_CONFIGS（避免 rerun 時重新隨機）
@@ -1024,9 +1023,9 @@ if st.session_state.model_images:
                 if real_idx < total_imgs:
                     _show_photo(st.session_state.model_images[real_idx], real_idx, "lower")
 
-    # 第三行：1 張腳部特寫（需要 index 4）
+    # 第三行：1 張屈膝坐姿（需要 index 4）
     if total_imgs > 4:
-        st.markdown("**🦶 腳部特寫**")
+        st.markdown("**🧎 屈膝坐姿**")
         feet_col, _ = st.columns([1, 1])
         with feet_col:
             _show_photo(st.session_state.model_images[4], 4, "feet")
