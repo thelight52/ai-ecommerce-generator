@@ -892,6 +892,13 @@ LOWERBODY_POSES = [
             "Correct anatomy: 5 toes per foot, natural proportions."
         ),
     },
+    {
+        "id": "M", "name": "🪜 階梯踩踏",
+        "shot_desc": (
+            "Model standing on stone or concrete steps with one foot on a higher step and the other foot on a lower step, side angle shot focusing on lower body, legs in a natural climbing pose showing sock details clearly on both feet, outdoor park or street stairway setting with railing. "
+            "Correct anatomy: 5 toes per foot, natural proportions."
+        ),
+    },
 ]
 
 # 腳部特寫動作池（E / G）
