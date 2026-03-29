@@ -392,6 +392,10 @@ if "model_images" not in st.session_state or st.session_state.model_images is No
 for key in ["cost_step2", "cost_step3_total", "cost_step4", "cost_step5"]:
     if key not in st.session_state:
         st.session_state[key] = 0.0
+if "selected_files" not in st.session_state:
+    st.session_state.selected_files = []
+if "batch_results" not in st.session_state:
+    st.session_state.batch_results = []
 
 # ─────────────────────────────────────────
 # 主標題
@@ -428,23 +432,50 @@ class _MockFile:
 
 uploaded_file = None
 
-# 多張上傳：縮圖網格 + radio 選擇
+# 多張上傳：縮圖網格 + checkbox 多選
 if uploaded_files:
-    if len(uploaded_files) > 1:
-        st.markdown(f"**已上傳 {len(uploaded_files)} 張圖片，請選擇要處理的一張：**")
-        thumb_cols = st.columns(min(len(uploaded_files), 4))
-        for i, f in enumerate(uploaded_files):
-            with thumb_cols[i % 4]:
-                st.image(f.getvalue(), caption=f.name, use_container_width=True)
-        selected_name = st.radio(
-            "選擇圖片",
-            [f.name for f in uploaded_files],
-            horizontal=True,
-            label_visibility="collapsed",
-        )
-        uploaded_file = next(f for f in uploaded_files if f.name == selected_name)
-    else:
+    n_uploaded = len(uploaded_files)
+    if n_uploaded == 1:
         uploaded_file = uploaded_files[0]
+        st.session_state.selected_files = [uploaded_files[0]]
+    else:
+        st.markdown(f"**已上傳 {n_uploaded} 張圖片，請勾選要處理的圖片：**")
+
+        # 當上傳的檔案清單改變時，重置選取狀態
+        _files_key = tuple(f.name for f in uploaded_files)
+        if st.session_state.get("_uploaded_files_key") != _files_key:
+            st.session_state["_uploaded_files_key"] = _files_key
+            for _ci in range(n_uploaded):
+                st.session_state[f"check_img_{_ci}"] = True
+            st.session_state["_select_all_cb"] = True
+
+        # 全選 callback
+        def _on_select_all_change():
+            _val = st.session_state.get("_select_all_cb", True)
+            for _j in range(n_uploaded):
+                st.session_state[f"check_img_{_j}"] = _val
+
+        st.checkbox("✅ 全選", key="_select_all_cb", on_change=_on_select_all_change)
+
+        # 縮圖網格 + 個別 checkbox
+        _cols_n = min(n_uploaded, 4)
+        _thumb_cols = st.columns(_cols_n)
+        _selected_files = []
+        for _ci, _cf in enumerate(uploaded_files):
+            with _thumb_cols[_ci % _cols_n]:
+                st.image(_cf.getvalue(), use_container_width=True)
+                if st.checkbox(_cf.name, key=f"check_img_{_ci}"):
+                    _selected_files.append(_cf)
+
+        st.session_state.selected_files = _selected_files
+
+        if _selected_files:
+            _n_sel = len(_selected_files)
+            _mode = "批次處理模式" if _n_sel > 1 else "單張處理模式"
+            st.markdown(f"**已選 {_n_sel}/{n_uploaded} 張**（{_mode}）")
+            uploaded_file = _selected_files[0]
+        else:
+            st.warning("⚠️ 請至少選擇一張圖片")
 
 # 若未上傳，提供範例圖片按鈕
 if not uploaded_file:
@@ -550,6 +581,18 @@ else:
     sock_length_zh = f"，襪筒長度約 {sock_length}" if sock_length else ""
     scene_desc = random.choice(scene_options[selected_scene])
     sock_type_zh = sock_type.split(" — ")[0]
+
+    # 儲存批次處理所需的分析參數（供 Step 4 後的批次處理區塊使用）
+    st.session_state["_batch_params"] = {
+        "sock_info_en": sock_info_en,
+        "sock_length_desc": sock_length_desc,
+        "sock_type_zh": sock_type_zh,
+        "sock_length_zh": sock_length_zh,
+        "sock_length": sock_length,
+        "selected_scene": selected_scene,
+        "selected_outfit": selected_outfit,
+        "outfit_desc_en": outfit_desc_en,
+    }
 
     if st.button("🔍 分析圖片並自動產出提示詞", type="primary", use_container_width=False):
         with st.spinner("Claude 正在分析商品圖片，自動生成提示詞…"):
@@ -1333,6 +1376,230 @@ if st.session_state.captions:
             '<div class="info-box">💡 下一步：將圖片與文案貼至 <strong>Instagram</strong>、<strong>Buffer</strong> 或 <strong>Later</strong> 排程發布！</div>',
             unsafe_allow_html=True,
         )
+
+# ─────────────────────────────────────────
+# 批次處理：多張圖片同時執行 Step 2-4
+# ─────────────────────────────────────────
+_sel_batch = st.session_state.get("selected_files", [])
+_bp = st.session_state.get("_batch_params")
+
+if len(_sel_batch) > 1 and _bp:
+    st.markdown('<div class="step-header">批次處理 · 🚀 對全部選中圖片執行完整流程</div>', unsafe_allow_html=True)
+    st.markdown(
+        f"已選取 **{len(_sel_batch)}** 張圖片。點擊下方按鈕，系統將依序對每張圖片執行"
+        f"分析提示詞 → 生成 8 張實穿照 → 生成文案，完成後統一顯示結果。"
+    )
+    st.warning("⚠️ 批次處理需要較長時間（每張圖片約 3～5 分鐘），請耐心等候。")
+
+    _bc1, _bc2, _bc3 = st.columns(3)
+    with _bc1:
+        _batch_style = st.selectbox(
+            "✨ 文案風格",
+            ["韓系少女活潑風（可愛、輕鬆、有個性）", "簡約質感電商風（專業、俐落、有品味）",
+             "溫柔居家療癒風（溫暖、舒適、生活感）", "時髦潮流街頭風（大膽、時尚、話題性）"],
+            key="batch_caption_style",
+        )
+    with _bc2:
+        _batch_lang = st.selectbox("🌐 語言", ["繁體中文", "繁體中文 + English", "English only"], key="batch_caption_lang")
+    with _bc3:
+        _batch_product_desc = st.text_input("📦 商品補充（選填）", placeholder="例：純棉材質、特價 NT$199", key="batch_product_desc")
+
+    if st.button(f"🚀 批次處理全部 {len(_sel_batch)} 張圖片", type="primary", key="btn_batch_all", use_container_width=False):
+        _batch_results_new = []
+        _total_b = len(_sel_batch)
+        _prog_b = st.progress(0, text="正在準備批次處理…")
+        _status_b = st.empty()
+
+        _b_ak = st.session_state.get("anthropic_key_cache", "")
+        _b_gk = st.session_state.get("api_key_cache", "")
+
+        _b_lang_map = {
+            "繁體中文": "請全程使用繁體中文（台灣用語）撰寫，包含標題、內文與 hashtag。",
+            "繁體中文 + English": "標題與內文使用繁體中文，hashtag 中英混合。",
+            "English only": "Please write entirely in English including all hashtags.",
+        }
+
+        for _bidx, _bfile in enumerate(_sel_batch):
+            _prog_b.progress(_bidx / _total_b, text=f"正在處理第 {_bidx+1}/{_total_b} 張：{_bfile.name}")
+            _status_b.markdown(f"**正在處理第 {_bidx+1}/{_total_b} 張：** `{_bfile.name}`")
+            _bres = {"filename": _bfile.name, "error": None, "prompts": None, "images": [], "caption": ""}
+
+            try:
+                _b_bytes = _bfile.getvalue()
+                _b_b64 = base64.standard_b64encode(_b_bytes).decode("utf-8")
+                _b_mime = _bfile.type or "image/jpeg"
+                _b_scene = random.choice(SCENE_CONFIG.get(_bp["selected_scene"], ["pure white studio background, soft diffused studio lighting"]))
+
+                # ── Step 2：分析圖片產出提示詞 ──
+                _b_analysis_prompt = f"""You are a professional e-commerce fashion photographer and AI image prompt engineer specializing in Korean style.
+
+Analyze this product flat lay image carefully and generate AI image generation prompts for a Korean female model wearing this product.
+
+PRODUCT INFO (MUST appear in the generated prompts):
+- Sock type: {_bp['sock_info_en']}{_bp['sock_length_desc']}
+- Scene / Background: {_b_scene}
+- Outfit style: {_bp['outfit_desc_en']}
+
+IMPORTANT RULES:
+- The generated positive_en prompt MUST explicitly contain these exact details:
+  1. The sock type: "{_bp['sock_info_en']}"
+  2. The sock length: "{_bp['sock_length'] if _bp['sock_length'] else 'not specified'}" (include exact measurement if provided)
+  3. The scene description keywords from: "{_b_scene}"
+  4. The outfit description: "{_bp['outfit_desc_en']}"
+- Do NOT describe the specific pattern, color, or design details of the product itself (the reference image will be provided separately to the image generation model)
+- Focus on the MODEL SCENE: pose, angle, background, lighting, styling
+- The sock type is "{_bp['sock_info_en']}" — make sure the pose and camera angle clearly showcase socks at the correct height on the leg
+- Shot must be LOWER BODY only (waist down, include waist)
+- Korean female model aesthetic, slim legs
+- E-commerce commercial quality
+- Slight side angle to showcase the product
+- The negative prompt should prevent common AI image generation errors
+
+Return ONLY a valid JSON object (no markdown, no extra text) with this exact structure:
+{{
+  "positive_en": "Korean female model, slim legs, wearing {_bp['sock_info_en']}{_bp['sock_length_desc']}, {_bp['outfit_desc_en']}, [pose details], lower body shot from waist down, {_b_scene}, [lighting], [photography quality]",
+  "positive_zh": "韓系女性模特兒，穿著{_bp['sock_type_zh']}{_bp['sock_length_zh']}，{_bp['selected_outfit']}，[姿勢細節]，腰部以下畫面，[場景]，[光線]，[攝影質感]",
+  "negative_en": "full body, face visible, upper body dominant, extra limbs, distorted feet, deformed toes, blurry, low quality, pixelated, watermark, text overlay, logo, jpeg artifacts, overexposed, dark shadows, plastic skin, unrealistic proportions, missing product, duplicate body parts, bad anatomy, extra fingers, nsfw, wrong sock length, barefoot"
+}}"""
+
+                _b_claude = anthropic.Anthropic(api_key=_b_ak)
+                _b_resp = retry_api_call(
+                    _b_claude.messages.create,
+                    model="claude-sonnet-4-6",
+                    max_tokens=1024,
+                    messages=[{"role": "user", "content": [
+                        {"type": "image", "source": {"type": "base64", "media_type": _b_mime, "data": _b_b64}},
+                        {"type": "text", "text": _b_analysis_prompt},
+                    ]}],
+                )
+                _btext = _b_resp.content[0].text.strip()
+                if "```json" in _btext:
+                    _btext = _btext.split("```json")[1].split("```")[0].strip()
+                elif "```" in _btext:
+                    _btext = _btext.split("```")[1].split("```")[0].strip()
+                _bres["prompts"] = json.loads(_btext)
+
+                # ── Step 3：生成 8 張實穿照 ──
+                _b_ref = types.Part.from_bytes(data=_b_bytes, mime_type=_b_mime)
+                _b_base_prompt = _bres["prompts"]["positive_en"] + f", {_bp['outfit_desc_en']}"
+                _b_neg = _bres["prompts"]["negative_en"]
+                _b_shots = build_shot_configs()
+                _b_images = []
+                for _si, _bshot in enumerate(_b_shots):
+                    _status_b.markdown(
+                        f"**第 {_bidx+1}/{_total_b} 張** `{_bfile.name}` — 生成照片 {_si+1}/8…"
+                    )
+                    _b_hero_ref = None
+                    if _b_images and _b_images[0].get("bytes"):
+                        _b_hero_ref = types.Part.from_bytes(data=_b_images[0]["bytes"], mime_type="image/png")
+                    _img_r = generate_single_photo(
+                        _b_gk, _bshot, _b_base_prompt, _b_neg, _b_scene, _b_ref, _b_hero_ref
+                    )
+                    _b_images.append(_img_r)
+                _bres["images"] = [_im for _im in _b_images if _im.get("bytes")]
+
+                # ── Step 4：生成文案 ──
+                _b_cap_content = []
+                for _bim in _bres["images"][:8]:
+                    _b_cap_content.append({
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": "image/png",
+                                   "data": base64.standard_b64encode(_bim["bytes"]).decode("utf-8")},
+                    })
+                _b_extra = f"\n- 商品特色補充：{_batch_product_desc}" if _batch_product_desc else ""
+                _b_cap_prompt = f"""你是一位專業的電商社群媒體文案師，擅長韓系時尚品牌的 Instagram 行銷。
+
+請根據「附圖中的模特兒實穿照」撰寫一篇高互動率的 Instagram 貼文文案。
+文案必須與照片中的場景、氛圍、穿搭情境完全吻合。
+
+【照片場景資訊】
+- 拍攝場景：{_bp['selected_scene']}
+- 照片中的穿搭提示詞：{_bres['prompts'].get('positive_en', '')}
+
+【商品與風格】
+- 商品類型：韓系襪子（電商商品）
+- 文案風格：{_batch_style}{_b_extra}
+- 語言規範：{_b_lang_map.get(_batch_lang, _b_lang_map['繁體中文'])}
+
+【撰寫要求】
+1. 仔細觀察附圖中模特兒的姿勢、場景、光線、穿搭搭配
+2. 文案需描述照片中的情境（例如：咖啡廳的午後、室內的慵懶時光等）
+3. 將襪子自然融入穿搭場景的敘事中，不要只是單純介紹商品規格
+4. 讓讀者看到文案就能聯想到照片中的畫面
+
+請依照以下格式輸出，不要加其他說明：
+
+【標題】
+（1行，吸睛有力，與照片場景呼應，可含表情符號）
+
+【貼文內容】
+（4～6行，以照片場景為背景，自然口語化地帶出穿搭情境與商品亮點，含適量表情符號）
+
+【Call to Action】
+（1行，引導互動或購買）
+
+【Hashtags】
+（20～25個，分行整理，涵蓋：商品、穿搭、韓系、場景情境、季節、品味生活 等主題）
+"""
+                _b_cap_content.append({"type": "text", "text": _b_cap_prompt})
+                _b_cap_resp = retry_api_call(
+                    _b_claude.messages.create,
+                    model="claude-sonnet-4-6",
+                    max_tokens=2048,
+                    messages=[{"role": "user", "content": _b_cap_content}],
+                )
+                _bres["caption"] = _b_cap_resp.content[0].text
+
+            except Exception as _be:
+                _bres["error"] = str(_be)
+
+            _batch_results_new.append(_bres)
+            _prog_b.progress((_bidx + 1) / _total_b, text=f"第 {_bidx+1}/{_total_b} 張完成")
+
+        _prog_b.progress(1.0, text="✅ 批次處理完成！")
+        _status_b.markdown("✅ **批次處理全部完成！**")
+        st.session_state.batch_results = _batch_results_new
+        st.rerun()
+
+    # 顯示批次結果
+    if st.session_state.batch_results:
+        st.markdown("### 📦 批次處理結果")
+        for _bres in st.session_state.batch_results:
+            _icon = "✅" if not _bres.get("error") else "❌"
+            with st.expander(f"{_icon} {_bres['filename']}", expanded=False):
+                if _bres.get("error"):
+                    st.error(f"處理失敗：{_bres['error']}")
+                else:
+                    if _bres.get("images"):
+                        _bi_cols = st.columns(min(len(_bres["images"]), 4))
+                        for _ii, _bim in enumerate(_bres["images"]):
+                            if _bim.get("bytes"):
+                                with _bi_cols[_ii % 4]:
+                                    st.image(_bim["bytes"], caption=_bim["label"], use_container_width=True)
+                                    st.download_button(
+                                        "💾 下載",
+                                        data=_bim["bytes"],
+                                        file_name=f"{_bres['filename'].rsplit('.', 1)[0]}_{_ii+1}.png",
+                                        mime="image/png",
+                                        key=f"dl_batch_{_bres['filename']}_{_ii}",
+                                        use_container_width=True,
+                                    )
+                    if _bres.get("caption"):
+                        st.text_area(
+                            "📝 文案",
+                            value=_bres["caption"],
+                            height=200,
+                            key=f"cap_batch_{_bres['filename']}",
+                        )
+                        st.download_button(
+                            "📋 下載文案 .txt",
+                            data=_bres["caption"].encode("utf-8"),
+                            file_name=f"{_bres['filename'].rsplit('.', 1)[0]}_caption.txt",
+                            mime="text/plain",
+                            key=f"dl_cap_batch_{_bres['filename']}",
+                        )
+
+    st.divider()
 
 # ─────────────────────────────────────────
 # STEP 5：生成穿搭短影音（Kling 3.0）
