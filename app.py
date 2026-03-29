@@ -18,6 +18,25 @@ import random
 import pathlib
 
 # ─────────────────────────────────────────
+# 費用計算
+# ─────────────────────────────────────────
+_CLAUDE_IN_PRICE  = 3.0  / 1_000_000   # Claude Sonnet 4.6: $3 / 1M input tokens
+_CLAUDE_OUT_PRICE = 15.0 / 1_000_000   # Claude Sonnet 4.6: $15 / 1M output tokens
+_GEMINI_IMG_PRICE = 0.04                # Gemini 3.1 Flash Image: ~$0.04 / 張（預估）
+_KLING_STD_PRICE  = 0.028               # Kling v3 std: ~$0.028 / 秒（預估）
+_KLING_PRO_PRICE  = 0.056               # Kling v3 pro: ~$0.056 / 秒（預估）
+
+def _cost_claude(inp: int, out: int) -> float:
+    return inp * _CLAUDE_IN_PRICE + out * _CLAUDE_OUT_PRICE
+
+def _cost_gemini_images(n: int = 1) -> float:
+    return n * _GEMINI_IMG_PRICE
+
+def _cost_kling(duration_sec: int, mode: str = "std") -> float:
+    rate = _KLING_PRO_PRICE if mode == "pro" else _KLING_STD_PRICE
+    return duration_sec * rate
+
+# ─────────────────────────────────────────
 # 頁面設定
 # ─────────────────────────────────────────
 st.set_page_config(
@@ -148,6 +167,62 @@ with st.sidebar:
         )
 
     st.markdown("---")
+
+    # ── 累計花費 ──
+    _total_cost = (
+        st.session_state.get("cost_step2", 0.0) +
+        st.session_state.get("cost_step3_total", 0.0) +
+        st.session_state.get("cost_step4", 0.0) +
+        st.session_state.get("cost_step5", 0.0)
+    )
+    st.metric("💰 本次累計花費", f"${_total_cost:.4f}")
+
+    # ── 帳戶狀態 ──
+    with st.expander("📊 服務帳戶狀態", expanded=False):
+        _anthr_ok = bool(anthropic_key)
+        st.markdown(f"{'✅' if _anthr_ok else '❌'} **Anthropic** {'已連結' if _anthr_ok else '尚未連結'}")
+        if _anthr_ok:
+            st.caption("餘額需手動查詢")
+            st.markdown("[🔗 console.anthropic.com](https://console.anthropic.com/settings/billing)")
+
+        _google_ok = bool(api_key)
+        st.markdown(f"{'✅' if _google_ok else '❌'} **Google AI** {'已連結' if _google_ok else '尚未連結'}")
+        if _google_ok:
+            st.caption("Google AI Studio 按用量計費，需手動查詢")
+            st.markdown("[🔗 aistudio.google.com](https://aistudio.google.com/apikey)")
+
+        _kling_ok = bool(kling_ak and kling_sk)
+        st.markdown(f"{'✅' if _kling_ok else '❌'} **Kling AI** {'已連結' if _kling_ok else '尚未連結'}")
+        if _kling_ok:
+            # 嘗試查詢 Kling 積分（快取於 session state）
+            if "kling_balance_display" in st.session_state:
+                st.caption(f"積分：{st.session_state.kling_balance_display}")
+            if st.button("🔄 查詢 Kling 積分", key="btn_kling_balance"):
+                try:
+                    import jwt as _pyjwt_b
+                    import requests as _req_b
+                    import time as _tb
+                    _tok_b = _pyjwt_b.encode(
+                        {"iss": kling_ak, "exp": int(_tb.time()) + 300, "nbf": int(_tb.time()) - 5},
+                        kling_sk, algorithm="HS256", headers={"alg": "HS256", "typ": "JWT"}
+                    )
+                    _rb = _req_b.get(
+                        "https://api-singapore.klingai.com/v1/account/resource",
+                        headers={"Authorization": f"Bearer {_tok_b}"},
+                        timeout=5,
+                    )
+                    _db = _rb.json()
+                    if _db.get("code") == 0 and _db.get("data"):
+                        _credits = _db["data"].get("credits", {})
+                        _avail = _credits.get("available", "?")
+                        st.session_state.kling_balance_display = f"{_avail} 積分"
+                    else:
+                        st.session_state.kling_balance_display = "查詢失敗"
+                except Exception:
+                    st.session_state.kling_balance_display = "查詢失敗"
+            st.markdown("[🔗 kling.ai/dev](https://kling.ai/dev)")
+
+    st.markdown("---")
     st.markdown("### 📋 流程說明")
     st.markdown("""
 1. 🖼️ **上傳**平拍照
@@ -171,6 +246,9 @@ for key in ["prompts", "model_image_bytes", "model_images", "captions", "upload_
         st.session_state[key] = None
 if "model_images" not in st.session_state or st.session_state.model_images is None:
     st.session_state.model_images = []
+for key in ["cost_step2", "cost_step3_total", "cost_step4", "cost_step5"]:
+    if key not in st.session_state:
+        st.session_state[key] = 0.0
 
 # ─────────────────────────────────────────
 # 主標題
@@ -404,6 +482,11 @@ Return ONLY a valid JSON object (no markdown, no extra text) with this exact str
 
                 st.session_state.prompts = json.loads(text)
                 st.success("✅ 提示詞已自動生成！可在下方編輯後再生成圖片。")
+                _inp2 = response.usage.input_tokens
+                _out2 = response.usage.output_tokens
+                _c2 = _cost_claude(_inp2, _out2)
+                st.session_state.cost_step2 = _c2
+                st.info(f"💰 本步驟花費：${_c2:.4f}（Input: {_inp2:,} tokens / Output: {_out2:,} tokens）")
 
             except json.JSONDecodeError:
                 st.session_state.prompts = {
@@ -772,6 +855,9 @@ else:
                 "scene_desc": scene_desc,
             }
             st.success("✅ 基準照生成完成！確認滿意後，按下方按鈕生成其餘 4 張。")
+            _c3a = _cost_gemini_images(1)
+            st.session_state.cost_step3_total = st.session_state.get("cost_step3_total", 0.0) + _c3a
+            st.info(f"💰 本步驟花費：${_c3a:.4f}（Gemini 圖片生成 1 張，預估值）")
         else:
             st.error(f"❌ 基準照生成失敗：{result.get('error', '未知錯誤')}")
 
@@ -827,6 +913,10 @@ else:
                         break
                 success_count = sum(1 for i in all_images if i.get("bytes"))
                 st.success(f"✅ 成功生成 {success_count} / 5 張照片！")
+                _remaining_ok = sum(1 for r in remaining_images if r.get("bytes"))
+                _c3b = _cost_gemini_images(_remaining_ok)
+                st.session_state.cost_step3_total = st.session_state.get("cost_step3_total", 0.0) + _c3b
+                st.info(f"💰 本步驟花費：${_c3b:.4f}（Gemini 圖片生成 {_remaining_ok} 張，預估值）")
 
 # ── 個別重新生成處理 ──
 def _get_regen_params():
@@ -893,6 +983,9 @@ for regen_idx in range(5):
                         break
             if result.get("bytes"):
                 st.success(f"✅ 第 {regen_idx+1} 張照片重新生成成功！")
+                _c_regen = _cost_gemini_images(1)
+                st.session_state.cost_step3_total = st.session_state.get("cost_step3_total", 0.0) + _c_regen
+                st.info(f"💰 重新生成花費：${_c_regen:.4f}（Gemini 圖片生成 1 張，預估值）")
             else:
                 st.error(f"❌ 重新生成失敗：{result.get('error', '未知錯誤')}")
 
@@ -1081,6 +1174,11 @@ else:
                 )
                 st.session_state.captions = response.content[0].text
                 st.success("✅ 文案生成完成！（已參考實穿照場景）" if has_model_image else "✅ 文案生成完成！")
+                _inp4 = response.usage.input_tokens
+                _out4 = response.usage.output_tokens
+                _c4 = _cost_claude(_inp4, _out4)
+                st.session_state.cost_step4 = _c4
+                st.info(f"💰 本步驟花費：${_c4:.4f}（Input: {_inp4:,} tokens / Output: {_out4:,} tokens）")
 
             except Exception as e:
                 st.error(f"❌ 文案生成失敗：{e}")
@@ -1272,6 +1370,9 @@ else:
                             vid_resp.raise_for_status()
                             st.session_state.video_bytes = vid_resp.content
                             st.success(f"✅ 穿搭短影音生成成功！（Kling 3.0 · {mode} · {duration}s）")
+                            _c5 = _cost_kling(duration, mode)
+                            st.session_state.cost_step5 = _c5
+                            st.info(f"💰 本步驟花費：${_c5:.4f}（Kling v3 · {mode} · {duration} 秒，預估值）")
                         elif task_status != "failed":
                             st.error("❌ 影片生成超時（已等待 10 分鐘），請稍後再試。")
 
