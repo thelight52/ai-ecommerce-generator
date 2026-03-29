@@ -87,6 +87,98 @@ def _cost_kling(duration_sec: int, mode: str = "std") -> float:
     rate = _KLING_PRO_PRICE if mode == "pro" else _KLING_STD_PRICE
     return duration_sec * rate
 
+
+def _generate_bgm_wav(duration_sec: float, volume: float = 0.3) -> str:
+    """用 sine wave 和弦生成簡單的背景音樂 WAV 檔，不需外部音樂檔案。"""
+    import wave as _wave
+    import numpy as _np
+    import tempfile as _tmp
+
+    sample_rate = 44100
+    n = int(sample_rate * duration_sec)
+    t = _np.linspace(0, duration_sec, n, endpoint=False)
+
+    # C 大調和弦：C4-E4-G4-C5，加上 C3 低音根音
+    chord_freqs = [261.63, 329.63, 392.00, 523.25]
+    bass_freq = 130.81  # C3
+
+    signal = _np.zeros(n)
+    for f in chord_freqs:
+        signal += _np.sin(2 * _np.pi * f * t) * (0.6 / len(chord_freqs))
+    signal += _np.sin(2 * _np.pi * bass_freq * t) * 0.25
+
+    # 0.5 Hz LFO 讓音量緩慢起伏，更有韻律感
+    lfo = 0.75 + 0.25 * _np.sin(2 * _np.pi * 0.5 * t)
+    signal *= lfo * volume
+
+    # 淡入淡出（各 0.4 秒）
+    fade = min(int(0.4 * sample_rate), n // 4)
+    signal[:fade] *= _np.linspace(0, 1, fade)
+    signal[-fade:] *= _np.linspace(1, 0, fade)
+
+    signal = _np.clip(signal, -1.0, 1.0)
+    pcm = (signal * 32767).astype(_np.int16)
+
+    tmp = _tmp.NamedTemporaryFile(suffix=".wav", delete=False)
+    tmp.close()
+    with _wave.open(tmp.name, "w") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm.tobytes())
+    return tmp.name
+
+
+def _mix_bgm_into_video(video_bytes: bytes, bgm_volume: float) -> bytes:
+    """用 moviepy 將程式生成的 BGM 疊加到影片中，原有音效保留。"""
+    import tempfile as _tmp
+    import os as _os
+
+    try:
+        from moviepy.editor import VideoFileClip, AudioFileClip, CompositeAudioClip
+    except ImportError:
+        return video_bytes  # moviepy 未安裝時原樣返回
+
+    vid_path = _tmp.NamedTemporaryFile(suffix=".mp4", delete=False).name
+    out_path = _tmp.NamedTemporaryFile(suffix=".mp4", delete=False).name
+    bgm_path = None
+
+    try:
+        with open(vid_path, "wb") as f:
+            f.write(video_bytes)
+
+        video = VideoFileClip(vid_path)
+        bgm_path = _generate_bgm_wav(video.duration, volume=bgm_volume)
+        bgm_audio = AudioFileClip(bgm_path)
+
+        if video.audio is not None:
+            mixed = CompositeAudioClip([video.audio, bgm_audio])
+            final = video.set_audio(mixed)
+        else:
+            final = video.set_audio(bgm_audio)
+
+        final.write_videofile(
+            out_path, codec="libx264", audio_codec="aac",
+            logger=None, verbose=False,
+        )
+        with open(out_path, "rb") as f:
+            result = f.read()
+        return result
+    except Exception:
+        return video_bytes  # 失敗時原樣返回，不中斷主流程
+    finally:
+        for p in [vid_path, out_path]:
+            try:
+                _os.unlink(p)
+            except Exception:
+                pass
+        if bgm_path:
+            try:
+                _os.unlink(bgm_path)
+            except Exception:
+                pass
+
+
 # ─────────────────────────────────────────
 # 頁面設定
 # ─────────────────────────────────────────
@@ -1246,6 +1338,25 @@ else:
         with col_sound:
             video_sound = st.selectbox("🔊 音效", ["on（開啟）", "off（關閉）"], key="video_sound")
 
+        col_bgm, col_vol = st.columns(2)
+        with col_bgm:
+            add_bgm = st.checkbox(
+                "🎵 疊加背景音樂（BGM）",
+                value=True,
+                key="add_bgm",
+                help="影片生成後，用程式合成 C 大調和弦環境音樂疊入影片（需安裝 moviepy）。",
+            )
+        with col_vol:
+            bgm_volume = st.slider(
+                "🔉 BGM 音量",
+                min_value=0.05,
+                max_value=1.0,
+                value=0.25,
+                step=0.05,
+                key="bgm_volume",
+                disabled=not add_bgm,
+            )
+
         # 影片動態描述
         video_prompt_default = (
             f"CAMERA FRAMING: the camera MUST focus on the LOWER BODY — from the waist down to the feet. "
@@ -1354,8 +1465,15 @@ else:
                             # 下載影片
                             vid_resp = _requests.get(video_url, timeout=120)
                             vid_resp.raise_for_status()
-                            st.session_state.video_bytes = vid_resp.content
-                            st.success(f"✅ 穿搭短影音生成成功！（Kling 3.0 · {mode} · {duration}s）")
+                            raw_video = vid_resp.content
+
+                            # 疊加背景音樂（BGM）
+                            if add_bgm:
+                                with st.spinner("🎵 疊加背景音樂中，請稍候…"):
+                                    raw_video = _mix_bgm_into_video(raw_video, bgm_volume)
+
+                            st.session_state.video_bytes = raw_video
+                            st.success(f"✅ 穿搭短影音生成成功！（Kling 3.0 · {mode} · {duration}s{' · 含 BGM' if add_bgm else ''}）")
                             _c5 = _cost_kling(duration, mode)
                             st.session_state.cost_step5 = _c5
                             st.info(f"💰 本步驟花費：${_c5:.4f}（Kling v3 · {mode} · {duration} 秒，預估值）")
