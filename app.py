@@ -54,6 +54,72 @@ SCENE_CONFIG = {
 }
 
 # ─────────────────────────────────────────
+# 影片 Prompt 模板（4 種風格）
+# ─────────────────────────────────────────
+VIDEO_PROMPT_TEMPLATES = {
+    "A": {
+        "name": "日系甜美",
+        "scenes": ["簡約室內（白色大理石地板）", "清爽白背景（電商主圖）", "日系街道散步（清新文青）"],
+        "prompt": (
+            "Model wearing socks walks naturally, then lifts foot to show sock details, "
+            "camera gradually zooms in to focus on the foot and sock pattern close-up, "
+            "holds for 2 seconds on the pattern details, then in the last 5 seconds camera slowly zooms out "
+            "to reveal the full body, model strikes a sweet cute ending pose with a gentle smile, "
+            "soft dreamy Japanese-style BGM throughout."
+        ),
+    },
+    "B": {
+        "name": "韓系街拍",
+        "scenes": ["都市街拍（時尚潮流）", "公園遊樂場（可愛活潑）"],
+        "prompt": (
+            "Model wearing socks walks briskly on the street with a side-tracking camera angle, "
+            "stops at a spot and steps one foot onto a low ledge to showcase the socks, "
+            "camera enters slow-motion close-up on sock details, holds for 2 seconds, "
+            "then in the last 5 seconds camera pulls back wide, model turns back and flashes a finger heart ending pose, "
+            "upbeat Korean lo-fi hip-hop BGM throughout."
+        ),
+    },
+    "C": {
+        "name": "咖啡廳慵懶",
+        "scenes": ["咖啡廳外拍（暖陽散景）"],
+        "prompt": (
+            "Model sitting by a cafe window crosses legs and gently swings foot to display socks, "
+            "camera slowly pushes in from beside a coffee cup towards the foot and sock pattern close-up, "
+            "holds for 2 seconds on details, then in the last 5 seconds camera gently pulls back to full body, "
+            "model picks up coffee cup and smiles warmly as ending pose, "
+            "warm bossa nova acoustic BGM throughout."
+        ),
+    },
+    "D": {
+        "name": "校園青春",
+        "scenes": ["校園青春（活力陽光）"],
+        "prompt": (
+            "Model wearing socks jogs lightly through a school corridor or playground, "
+            "reaches a bench and lifts foot onto it to display socks, "
+            "camera quickly zooms in to sock pattern close-up, holds for 2 seconds, "
+            "then in the last 5 seconds camera zooms out wide, "
+            "model sits on the bench with hands cradling chin in a sweet ending pose, "
+            "bright Japanese school pop BGM throughout."
+        ),
+    },
+}
+
+_VIDEO_PROMPT_FIXED_SUFFIX = (
+    " Keep the EXACT SAME outfit, socks, shoes, and background as shown in the image. "
+    "CRITICAL: The socks must maintain the EXACT SAME pattern, color, and design as shown in the reference image throughout the entire video. "
+    "Pay special attention to preserving the sock pattern details accurately — do NOT alter or simplify the sock design."
+)
+
+
+def _match_video_prompt_template(scene_key: str) -> str:
+    """根據場景自動匹配最適合的影片 prompt 模板，回傳模板 key（A/B/C/D）"""
+    for tmpl_key, tmpl in VIDEO_PROMPT_TEMPLATES.items():
+        if scene_key in tmpl["scenes"]:
+            return tmpl_key
+    return random.choice(list(VIDEO_PROMPT_TEMPLATES.keys()))
+
+
+# ─────────────────────────────────────────
 # API 重試包裝函式（最多 3 次，指數退避）
 # ─────────────────────────────────────────
 def retry_api_call(fn, *args, max_retries=3, base_delay=2, **kwargs):
@@ -1726,32 +1792,55 @@ else:
                 f"{st.session_state.prompts['positive_en'][:300]}."
             )
 
-        # 影片動態描述
+        # 多照片參考備注
         _ref_note = (
             f" This video references {ref_img_count} styled photos — ensure the sock pattern is consistent across all of them."
             if ref_img_count > 1 else ""
         )
-        video_prompt_default = (
-            f"CAMERA FRAMING: the camera MUST focus on the LOWER BODY — from the waist down to the feet. "
-            f"The socks and shoes must be the visual focal point throughout the entire video. "
-            f"Do NOT frame the face or upper body as the main subject. "
-            f"The model starts with gentle lower-body movement: slowly swinging her legs, shifting weight between feet, "
-            f"doing a small step or twirl to showcase the socks, or playfully tapping her toes. "
-            f"Camera: slow cinematic low-angle shot or close-up tracking the feet and legs, smooth and steady. "
-            f"Keep the EXACT SAME outfit, socks, shoes, and background as shown in the image. "
-            f"CRITICAL: The socks must maintain the EXACT SAME pattern, color, and design as shown in the reference image throughout the entire video. "
-            f"Pay special attention to preserving the sock pattern details accurately — do NOT alter or simplify the sock design. "
-            f"{_sock_desc_hint}"
-            f"{_ref_note}"
-            f"Style: Korean fashion editorial video, warm and trendy, product-focused."
+
+        # ── 影片風格選擇器 ──
+        _style_map = {
+            "自動匹配": None,
+            "日系甜美": "A",
+            "韓系街拍": "B",
+            "咖啡廳慵懶": "C",
+            "校園青春": "D",
+        }
+        selected_style_label = st.selectbox(
+            "🎬 影片風格",
+            list(_style_map.keys()),
+            key="video_style_select",
+            help="自動匹配會根據 Step 2 選擇的場景決定風格；也可手動指定。",
         )
+        _chosen_tmpl_key = _style_map[selected_style_label]
+        if _chosen_tmpl_key is None:
+            _scene_key = st.session_state.get("selected_scene") or ""
+            _chosen_tmpl_key = _match_video_prompt_template(_scene_key)
+            _style_display = f"自動匹配 → {VIDEO_PROMPT_TEMPLATES[_chosen_tmpl_key]['name']}"
+        else:
+            _style_display = VIDEO_PROMPT_TEMPLATES[_chosen_tmpl_key]["name"]
+        st.caption(f"目前風格：**{_style_display}**")
+
+        # 組合 prompt：模板動態段 + 固定準確性後綴 + 圖案描述 + 多照參考備注
+        video_prompt_default = (
+            VIDEO_PROMPT_TEMPLATES[_chosen_tmpl_key]["prompt"]
+            + _VIDEO_PROMPT_FIXED_SUFFIX
+            + _sock_desc_hint
+            + _ref_note
+        )
+
+        # 當風格變更時，自動更新 text_area 內容（覆蓋手動編輯）
+        _prev_tmpl_key = st.session_state.get("_prev_video_tmpl_key")
+        if _prev_tmpl_key != _chosen_tmpl_key:
+            st.session_state["video_prompt_input"] = video_prompt_default
+            st.session_state["_prev_video_tmpl_key"] = _chosen_tmpl_key
 
         video_prompt = st.text_area(
             "🎬 影片動態描述（可自訂）",
             value=video_prompt_default,
-            height=120,
+            height=140,
             key="video_prompt_input",
-            help="描述影片中模特兒的動作、鏡頭運動、氛圍。影片會以選擇的照片為起始畫面。"
+            help="根據選擇的風格自動填入，仍可手動編輯。影片會以選擇的照片為起始畫面。"
         )
 
         if st.button("🎬 生成穿搭短影音", type="primary", use_container_width=False):
