@@ -281,7 +281,7 @@ with st.sidebar:
             type="password",
             value=st.session_state.kling_ak_cache,
             placeholder="ak-...",
-            help="前往 https://kling.ai/dev 取得 API Key"
+            help="前往 https://kling.ai/dev/resource-pack-manage 取得 API Key"
         )
         kling_sk_input = st.text_input(
             "Secret Key",
@@ -363,7 +363,7 @@ with st.sidebar:
                         st.session_state.kling_balance_display = "查詢失敗"
                 except Exception:
                     st.session_state.kling_balance_display = "查詢失敗"
-            st.markdown("[🔗 kling.ai/dev](https://kling.ai/dev)")
+            st.markdown("[🔗 kling.ai/dev/resource-pack-manage](https://kling.ai/dev/resource-pack-manage)")
 
     st.markdown("---")
     st.markdown("### 📋 流程說明")
@@ -1339,7 +1339,7 @@ if not st.session_state.model_images:
 elif not kling_ak or not kling_sk:
     st.warning("請先在左側 Sidebar 展開「🎬 Kling AI Key」輸入 Access Key 和 Secret Key")
     st.markdown(
-        '<div class="info-box">💡 前往 <a href="https://kling.ai/dev" target="_blank">kling.ai/dev</a> 取得 API Key</div>',
+        '<div class="info-box">💡 前往 <a href="https://kling.ai/dev/resource-pack-manage" target="_blank">kling.ai/dev/resource-pack-manage</a> 取得 API Key</div>',
         unsafe_allow_html=True,
     )
 else:
@@ -1519,7 +1519,7 @@ else:
                     st.code(traceback.format_exc(), language="text")
                     st.markdown(
                         '<div class="info-box">💡 提示：請確認 Kling AI API Key 正確且有足夠配額。'
-                        '前往 <a href="https://kling.ai/dev" target="_blank">kling.ai/dev</a> 查看。</div>',
+                        '前往 <a href="https://kling.ai/dev/resource-pack-manage" target="_blank">kling.ai/dev/resource-pack-manage</a> 查看。</div>',
                         unsafe_allow_html=True,
                     )
 
