@@ -789,7 +789,7 @@ def generate_single_photo(api_key_val, shot_config, base_prompt, neg_prompt, sce
 # ─────────────────────────────────────────
 # STEP 3：生成模特兒實穿照（5 張照片組）
 # ─────────────────────────────────────────
-st.markdown('<div class="step-header">Step 3 · 🎨 生成模特兒實穿照組（5 張）</div>', unsafe_allow_html=True)
+st.markdown('<div class="step-header">Step 3 · 🎨 生成模特兒實穿照組（8 張）</div>', unsafe_allow_html=True)
 
 # ── 動作類型池（依拍攝範圍分類） ──
 # 全身照動作池（A / C / D）
@@ -919,16 +919,19 @@ FEET_POSES = [
 ]
 
 def build_shot_configs():
-    """每次生成時隨機組合 5 張照片的動作：2 全身 + 2 下半身 + 1 腳部"""
-    full = random.sample(FULLBODY_POSES, 2)
-    lower = random.sample(LOWERBODY_POSES, 2)
+    """每次生成時隨機組合 8 張照片的動作：3 全身 + 4 下半身 + 1 屈膝坐姿"""
+    full = random.sample(FULLBODY_POSES, 3)
+    lower = random.sample(LOWERBODY_POSES, 4)
     feet = random.sample(FEET_POSES, 1)
 
     return [
         {"label": f"📷 全身照 ①（{full[0]['name']}）", "shot_desc": full[0]["shot_desc"]},
         {"label": f"📷 全身照 ②（{full[1]['name']}）", "shot_desc": full[1]["shot_desc"]},
+        {"label": f"📷 全身照 ③（{full[2]['name']}）", "shot_desc": full[2]["shot_desc"]},
         {"label": f"🦵 下半身特寫 ①（{lower[0]['name']}）", "shot_desc": lower[0]["shot_desc"]},
         {"label": f"🦵 下半身特寫 ②（{lower[1]['name']}）", "shot_desc": lower[1]["shot_desc"]},
+        {"label": f"🦵 下半身特寫 ③（{lower[2]['name']}）", "shot_desc": lower[2]["shot_desc"]},
+        {"label": f"🦵 下半身特寫 ④（{lower[3]['name']}）", "shot_desc": lower[3]["shot_desc"]},
         {"label": f"🧎 屈膝坐姿（{feet[0]['name']}）", "shot_desc": feet[0]["shot_desc"]},
     ]
 
@@ -950,7 +953,7 @@ else:
     if st.session_state.get("selected_outfit"):
         st.info(f"👗 穿搭風格：**{st.session_state.selected_outfit}**（可在 Step 2 更換）")
 
-    st.markdown("**Step 3a**: 先生成第 1 張基準照 → **Step 3b**: 確認後再生成其餘 4 張")
+    st.markdown("**Step 3a**: 先生成第 1 張基準照 → **Step 3b**: 確認後再生成其餘 7 張")
 
     if st.button("🎨 生成第 1 張基準實穿照", type="primary", use_container_width=False):
         # 每次生成重新隨機組合動作
@@ -994,7 +997,7 @@ else:
                 "neg_prompt": neg_prompt,
                 "scene_desc": scene_desc,
             }
-            st.success("✅ 基準照生成完成！確認滿意後，按下方按鈕生成其餘 4 張。")
+            st.success("✅ 基準照生成完成！確認滿意後，按下方按鈕生成其餘 7 張。")
             _c3a = _cost_gemini_images(1)
             st.session_state.cost_step3_total = st.session_state.get("cost_step3_total", 0.0) + _c3a
             st.info(f"💰 本步驟花費：${_c3a:.4f}（Gemini 圖片生成 1 張，預估值）")
@@ -1009,7 +1012,7 @@ else:
         st.image(hero_img, caption=hero["label"], width=400)
 
         if not st.session_state.remaining_generated:
-            if st.button("✅ 基準照 OK，生成其餘 4 張", type="primary", use_container_width=False):
+            if st.button("✅ 基準照 OK，生成其餘 7 張", type="primary", use_container_width=False):
                 params = st.session_state.get("_gen_params", {})
                 base_prompt = params.get("base_prompt", st.session_state.prompts.get("positive_en", ""))
                 neg_prompt = params.get("neg_prompt", st.session_state.prompts.get("negative_en", ""))
@@ -1033,7 +1036,7 @@ else:
                 for idx, shot in enumerate(remaining_shots):
                     progress_bar.progress(
                         idx / len(remaining_shots),
-                        text=f"正在生成 {shot['label']}（{idx+2}/5 · 參考基準照）…約需 30～60 秒"
+                        text=f"正在生成 {shot['label']}（{idx+2}/8 · 參考基準照）…約需 30～60 秒"
                     )
                     result = generate_single_photo(
                         api_key, shot, base_prompt, neg_prompt, scene_desc,
@@ -1052,7 +1055,7 @@ else:
                         st.session_state.model_image_bytes = img["bytes"]
                         break
                 success_count = sum(1 for i in all_images if i.get("bytes"))
-                st.success(f"✅ 成功生成 {success_count} / 5 張照片！")
+                st.success(f"✅ 成功生成 {success_count} / 8 張照片！")
                 _remaining_ok = sum(1 for r in remaining_images if r.get("bytes"))
                 _c3b = _cost_gemini_images(_remaining_ok)
                 st.session_state.cost_step3_total = st.session_state.get("cost_step3_total", 0.0) + _c3b
@@ -1077,7 +1080,7 @@ def _get_regen_params():
     return bp, np_, sd, rp
 
 # 處理重新生成請求（在顯示之前處理，避免 rerun 問題）
-for regen_idx in range(5):
+for regen_idx in range(8):
     regen_key = f"regen_photo_{regen_idx}"
     if st.session_state.get(regen_key):
         st.session_state[regen_key] = False
@@ -1130,36 +1133,45 @@ if st.session_state.model_images:
 
     total_imgs = len(st.session_state.model_images)
 
-    # 第一行：2 張全身照
+    # 第一行：3 張全身照（indices 0, 1, 2）
     st.markdown("**👗 全身照**")
-    full_cols = st.columns(2)
-    for i in range(2):
+    full_cols = st.columns(3)
+    for i in range(3):
         with full_cols[i]:
             if i < total_imgs:
                 _show_photo(st.session_state.model_images[i], i, "fullbody")
 
-    # 第二行：2 張下半身特寫（需要 index 2, 3）
-    if total_imgs > 2:
+    # 第二行：下半身特寫前 2 張（indices 3, 4）
+    if total_imgs > 3:
         st.markdown("**🦵 下半身特寫**")
-        lower_cols = st.columns(2)
+        lower_cols1 = st.columns(2)
         for i in range(2):
-            real_idx = i + 2
-            with lower_cols[i]:
+            real_idx = i + 3
+            with lower_cols1[i]:
                 if real_idx < total_imgs:
                     _show_photo(st.session_state.model_images[real_idx], real_idx, "lower")
 
-    # 第三行：1 張屈膝坐姿（需要 index 4）
-    if total_imgs > 4:
+    # 第三行：下半身特寫後 2 張（indices 5, 6）
+    if total_imgs > 5:
+        lower_cols2 = st.columns(2)
+        for i in range(2):
+            real_idx = i + 5
+            with lower_cols2[i]:
+                if real_idx < total_imgs:
+                    _show_photo(st.session_state.model_images[real_idx], real_idx, "lower2")
+
+    # 第四行：1 張屈膝坐姿（index 7）
+    if total_imgs > 7:
         st.markdown("**🧎 屈膝坐姿**")
-        feet_col, _ = st.columns([1, 1])
+        feet_col, _ = st.columns([1, 2])
         with feet_col:
-            _show_photo(st.session_state.model_images[4], 4, "feet")
+            _show_photo(st.session_state.model_images[7], 7, "feet")
 
     # 圖片資訊
     successful = [i for i in st.session_state.model_images if i.get("bytes")]
     if successful:
         st.markdown("---")
-        st.markdown(f"📊 **圖片資訊**：共 {len(successful)} / 5 張成功")
+        st.markdown(f"📊 **圖片資訊**：共 {len(successful)} / 8 張成功")
         for img_data in successful:
             img_info = Image.open(io.BytesIO(img_data["bytes"]))
             st.caption(f"  {img_data['label']}：{img_info.width}×{img_info.height}，{len(img_data['bytes'])/1024:.0f} KB")
@@ -1252,10 +1264,10 @@ else:
 （20～25個，分行整理，涵蓋：商品、穿搭、韓系、場景情境、季節、品味生活 等主題）
 """
 
-                # 組合訊息內容：附上所有成功的實穿照（最多 5 張）
+                # 組合訊息內容：附上所有成功的實穿照（最多 8 張）
                 message_content = []
                 if successful_images:
-                    for si in successful_images[:5]:
+                    for si in successful_images[:8]:
                         img_b64 = base64.standard_b64encode(si["bytes"]).decode("utf-8")
                         message_content.append({
                             "type": "image",
