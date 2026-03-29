@@ -909,9 +909,7 @@ FEET_POSES = [
     {
         "id": "G", "name": "屈膝坐姿側面",
         "shot_desc": (
-            "Model sitting on the ground with knees bent and drawn up toward chest, arms gently wrapped around knees (hands clasped or resting on shins). "
-            "Shot from a slight side angle (approximately 45 degrees) to clearly showcase the sock's side pattern and design details. "
-            "Full body visible from head to toe. Relaxed, casual pose with natural posture. "
+            "Model sitting down on the flat ground with buttocks touching the ground, both knees bent and pulled up toward chest, arms gently hugging or resting on the knees, shot from a slight side angle at ground level, the model is NOT standing, she is fully seated on the ground in a relaxed crouching sit position, socks visible on both feet which are flat on the ground, casual and youthful vibe. "
             "Sock side profile prominently displayed — pattern, color bands, and texture clearly visible. "
             "Outdoor setting, natural lighting. Correct anatomy throughout."
         ),
