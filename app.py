@@ -17,6 +17,7 @@ import os
 import random
 import pathlib
 import time as _time
+import zipfile
 
 # ─────────────────────────────────────────
 # 場景描述設定（統一管理，Step 2/3 共用）
@@ -57,15 +58,24 @@ SCENE_CONFIG = {
 # ─────────────────────────────────────────
 def retry_api_call(fn, *args, max_retries=3, base_delay=2, **kwargs):
     """呼叫 fn(*args, **kwargs)，失敗時最多重試 max_retries 次（指數退避），並在 UI 顯示重試狀態"""
+    status_placeholder = st.empty()
     for attempt in range(max_retries):
         try:
-            return fn(*args, **kwargs)
+            result = fn(*args, **kwargs)
+            status_placeholder.empty()
+            return result
         except Exception as e:
             if attempt < max_retries - 1:
                 delay = base_delay * (2 ** attempt)
-                st.warning(f"⚠️ API 呼叫失敗（第 {attempt + 1} 次），{delay} 秒後重試… 錯誤：{e}")
-                _time.sleep(delay)
+                next_attempt = attempt + 2
+                for remaining in range(delay, 0, -1):
+                    status_placeholder.warning(
+                        f"⏳ 生成失敗，{remaining} 秒後重試 (第 {next_attempt}/{max_retries} 次)..."
+                    )
+                    _time.sleep(1)
+                status_placeholder.info(f"🔄 正在重試中 (第 {next_attempt}/{max_retries} 次)...")
             else:
+                status_placeholder.error(f"❌ 重試 {max_retries} 次後仍失敗")
                 raise
 
 # ─────────────────────────────────────────
@@ -1223,6 +1233,29 @@ if st.session_state.model_images:
         for img_data in successful:
             img_info = Image.open(io.BytesIO(img_data["bytes"]))
             st.caption(f"  {img_data['label']}：{img_info.width}×{img_info.height}，{len(img_data['bytes'])/1024:.0f} KB")
+
+    # 批次下載（全部 8 張都成功才顯示）
+    all_successful = [i for i in st.session_state.model_images if i.get("bytes")]
+    if len(st.session_state.model_images) >= 8 and len(all_successful) == 8:
+        st.markdown("---")
+        product_name = (
+            pathlib.Path(uploaded_file.name).stem if uploaded_file else "商品"
+        )
+        from datetime import datetime as _dt
+        zip_filename = f"實穿照_{product_name}_{_dt.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        zip_buf = io.BytesIO()
+        with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for idx, img_data in enumerate(st.session_state.model_images):
+                if img_data.get("bytes"):
+                    entry_name = f"{idx+1}_{img_data['label']}.png"
+                    zf.writestr(entry_name, img_data["bytes"])
+        st.download_button(
+            label="📦 批次下載全部照片（ZIP）",
+            data=zip_buf.getvalue(),
+            file_name=zip_filename,
+            mime="application/zip",
+            use_container_width=False,
+        )
 
 st.divider()
 
