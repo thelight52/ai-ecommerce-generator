@@ -869,10 +869,10 @@ LOWERBODY_POSES = [
         ),
     },
     {
-        "id": "J", "name": "坐地持球",
+        "id": "J", "name": "🦶 坐地放鬆",
         "shot_desc": (
             "LOWER BODY ONLY from waist down. NO face, NO chest visible. "
-            "Model sitting on the ground holding a basketball with one hand, knees slightly bent, lower body close-up shot from a low angle, socks clearly visible on both feet, sporty casual vibe, outdoor basketball court setting. "
+            "Model sitting on the ground with knees slightly bent upward, both feet flat on the ground and slightly apart with toes pointing slightly outward, lower body close-up shot from a low angle, socks clearly visible on both feet showing front pattern details, legs naturally relaxed, casual and effortless pose. "
             "Correct anatomy: 5 toes per foot, natural proportions."
         ),
     },
@@ -885,10 +885,10 @@ LOWERBODY_POSES = [
         ),
     },
     {
-        "id": "L", "name": "高台翹腳",
+        "id": "L", "name": "💺 高台垂腳",
         "shot_desc": (
             "LOWER BODY ONLY from waist down. NO face, NO chest visible. "
-            "Model sitting on an elevated ledge or concrete bench with legs crossed (one leg over the other), lower body close-up shot, hands resting on knee, sock pattern prominently displayed on the front-facing foot, clean minimalist background with natural shadows. "
+            "Model sitting on an elevated concrete ledge or bench, one foot planted on the ground while the other foot hangs naturally off the edge, legs staggered front and back (not crossed or overlapping), hands clasped together resting above the front knee, lower body close-up shot, sock pattern on the front-facing leg prominently displayed, clean minimalist background with natural sunlight and shadows. "
             "Correct anatomy: 5 toes per foot, natural proportions."
         ),
     },
