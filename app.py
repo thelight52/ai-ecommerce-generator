@@ -1664,23 +1664,34 @@ else:
     if not successful_imgs:
         st.warning("沒有可用的實穿照片，請先在 Step 3 生成")
     else:
-        st.markdown("從實穿照片中選擇一張作為影片的**起始畫面**，Kling 3.0 會自動生成動態影片。")
+        st.markdown("從實穿照片中選擇**起始畫面**及**參考照片**，Kling 3.0 會自動生成動態影片。")
 
-        # 選擇起始照片
+        # 選擇起始照片（用於 API image 參數）
         img_labels = [img["label"] for img in successful_imgs]
-        selected_img_label = st.selectbox("📷 選擇起始照片", img_labels, key="video_source_img")
+        selected_img_label = st.selectbox("📷 選擇起始畫面（API 主參考圖）", img_labels, key="video_source_img")
         selected_img_data = next(i for i in successful_imgs if i["label"] == selected_img_label)
 
         # 預覽選擇的照片
         preview_img = Image.open(io.BytesIO(selected_img_data["bytes"]))
         st.image(preview_img, caption=f"起始畫面：{selected_img_label}", width=300)
 
+        # 多選參考照片（用於強化 prompt 的圖案描述）
+        st.markdown("**參考照片**：選擇要加入 prompt 強調的照片（Kling API 目前僅支援單張主圖，其餘以 prompt 描述補強）")
+        ref_img_labels = st.multiselect(
+            "📸 選擇參考照片（可多選，預設全選）",
+            img_labels,
+            default=img_labels,
+            key="video_ref_imgs",
+            help="所選照片的數量與樣式特徵會加入 prompt，幫助 Kling 保持更準確的襪子圖案。",
+        )
+        ref_img_count = len(ref_img_labels)
+
         # 影片設定
         col_ratio, col_dur = st.columns(2)
         with col_ratio:
             video_ratio = st.selectbox("📐 影片比例", ["9:16（直式 Reels）", "16:9（橫式）", "1:1（正方形）"], key="video_ratio")
         with col_dur:
-            video_duration = st.selectbox("⏱️ 影片長度", ["5 秒", "10 秒"], key="video_duration")
+            video_duration = st.selectbox("⏱️ 影片長度", ["5 秒", "10 秒", "15 秒"], key="video_duration")
 
         col_mode, col_sound = st.columns(2)
         with col_mode:
@@ -1707,7 +1718,19 @@ else:
                 disabled=not add_bgm,
             )
 
+        # 從 Step 2 分析結果擷取襪子圖案描述
+        _sock_desc_hint = ""
+        if st.session_state.get("prompts", {}).get("positive_en"):
+            _sock_desc_hint = (
+                f" The socks in this video have the following characteristics: "
+                f"{st.session_state.prompts['positive_en'][:300]}."
+            )
+
         # 影片動態描述
+        _ref_note = (
+            f" This video references {ref_img_count} styled photos — ensure the sock pattern is consistent across all of them."
+            if ref_img_count > 1 else ""
+        )
         video_prompt_default = (
             f"CAMERA FRAMING: the camera MUST focus on the LOWER BODY — from the waist down to the feet. "
             f"The socks and shoes must be the visual focal point throughout the entire video. "
@@ -1716,6 +1739,10 @@ else:
             f"doing a small step or twirl to showcase the socks, or playfully tapping her toes. "
             f"Camera: slow cinematic low-angle shot or close-up tracking the feet and legs, smooth and steady. "
             f"Keep the EXACT SAME outfit, socks, shoes, and background as shown in the image. "
+            f"CRITICAL: The socks must maintain the EXACT SAME pattern, color, and design as shown in the reference image throughout the entire video. "
+            f"Pay special attention to preserving the sock pattern details accurately — do NOT alter or simplify the sock design. "
+            f"{_sock_desc_hint}"
+            f"{_ref_note}"
             f"Style: Korean fashion editorial video, warm and trendy, product-focused."
         )
 
@@ -1735,7 +1762,7 @@ else:
 
                     # 解析設定
                     aspect = "9:16" if "9:16" in video_ratio else ("1:1" if "1:1" in video_ratio else "16:9")
-                    duration = 5 if "5" in video_duration else 10
+                    duration = 5 if video_duration.startswith("5") else (15 if video_duration.startswith("15") else 10)
                     mode = "std" if "std" in video_mode else "pro"
                     sound = "on" if "on" in video_sound else "off"
 
