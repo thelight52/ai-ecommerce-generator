@@ -577,6 +577,15 @@ if uploaded_file:
         st.markdown(f"- **大小**：`{uploaded_file.size / 1024:.1f} KB`")
         st.markdown(f"- **格式**：`{uploaded_file.type}`")
 
+    product_notes = st.text_area(
+        "📝 商品注意事項（選填）",
+        placeholder="例如：這款襪子花色偏淡，場景不要太暗；襪口有蕾絲邊設計請特別展示；此為兒童襪請用年輕活潑風格…",
+        help="輸入任何關於這款襪子的特殊說明，Claude 會在 Step 2 自動將這些注意事項融入提示詞中",
+        key="product_notes",
+    )
+else:
+    product_notes = ""
+
 st.divider()
 
 # ─────────────────────────────────────────
@@ -686,13 +695,17 @@ PRODUCT INFO (MUST appear in the generated prompts):
 - Sock type: {sock_info_en}{sock_length_desc}
 - Scene / Background: {scene_desc}
 - Outfit style: {outfit_desc_en}
-
+{"" if not product_notes else f"""
+SPECIAL NOTES FROM USER (you MUST incorporate these into your prompts):
+{product_notes}
+"""}
 IMPORTANT RULES:
 - The generated positive_en prompt MUST explicitly contain these exact details:
   1. The sock type: "{sock_info_en}"
   2. The sock length: "{sock_length if sock_length else 'not specified'}" (include exact measurement if provided)
   3. The scene description keywords from: "{scene_desc}"
   4. The outfit description: "{outfit_desc_en}"
+- If user provided special notes above, incorporate them naturally into the positive_en prompt and reflect any constraints in negative_en
 - Do NOT describe the specific pattern, color, or design details of the product itself (the reference image will be provided separately to the image generation model)
 - Focus on the MODEL SCENE: pose, angle, background, lighting, styling
 - The sock type is "{sock_info_en}" — make sure the pose and camera angle clearly showcase socks at the correct height on the leg
@@ -1538,13 +1551,17 @@ PRODUCT INFO (MUST appear in the generated prompts):
 - Sock type: {_bp['sock_info_en']}{_bp['sock_length_desc']}
 - Scene / Background: {_b_scene}
 - Outfit style: {_bp['outfit_desc_en']}
-
+{"" if not product_notes else f"""
+SPECIAL NOTES FROM USER (you MUST incorporate these into your prompts):
+{product_notes}
+"""}
 IMPORTANT RULES:
 - The generated positive_en prompt MUST explicitly contain these exact details:
   1. The sock type: "{_bp['sock_info_en']}"
   2. The sock length: "{_bp['sock_length'] if _bp['sock_length'] else 'not specified'}" (include exact measurement if provided)
   3. The scene description keywords from: "{_b_scene}"
   4. The outfit description: "{_bp['outfit_desc_en']}"
+- If user provided special notes above, incorporate them naturally into the positive_en prompt and reflect any constraints in negative_en
 - Do NOT describe the specific pattern, color, or design details of the product itself (the reference image will be provided separately to the image generation model)
 - Focus on the MODEL SCENE: pose, angle, background, lighting, styling
 - The sock type is "{_bp['sock_info_en']}" — make sure the pose and camera angle clearly showcase socks at the correct height on the leg
