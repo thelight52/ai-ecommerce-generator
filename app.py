@@ -1880,28 +1880,46 @@ else:
                     # 生成 JWT Token
                     token = _kling_jwt(kling_ak, kling_sk)
 
-                    # 發起 image-to-video 任務
-                    KLING_BASE = "https://api-global.klingai.com"
-                    create_resp = _requests.post(
-                        f"{KLING_BASE}/v1/videos/image2video",
-                        headers={
-                            "Authorization": f"Bearer {token}",
-                            "Content-Type": "application/json",
-                        },
-                        json={
-                            "model_name": "kling-v3",
-                            "mode": mode,
-                            "duration": str(duration),
-                            "aspect_ratio": aspect,
-                            "image": img_b64,
-                            "prompt": video_prompt,
-                            "sound": sound,
-                        },
-                        timeout=30,
-                    )
-                    create_data = create_resp.json()
+                    # 發起 image-to-video 任務（依序嘗試多個區域端點）
+                    _kling_endpoints = [
+                        "https://api-global.klingai.com",
+                        "https://api-singapore.klingai.com",
+                        "https://api-beijing.klingai.com",
+                    ]
+                    create_data = None
+                    _kling_last_err = ""
+                    for _ep in _kling_endpoints:
+                        try:
+                            create_resp = _requests.post(
+                                f"{_ep}/v1/videos/image2video",
+                                headers={
+                                    "Authorization": f"Bearer {token}",
+                                    "Content-Type": "application/json",
+                                },
+                                json={
+                                    "model_name": "kling-v3",
+                                    "mode": mode,
+                                    "duration": str(duration),
+                                    "aspect_ratio": aspect,
+                                    "image": img_b64,
+                                    "prompt": video_prompt,
+                                    "sound": sound,
+                                },
+                                timeout=30,
+                            )
+                            if create_resp.status_code == 200 and create_resp.text.strip():
+                                create_data = create_resp.json()
+                                KLING_BASE = _ep
+                                break
+                            else:
+                                _kling_last_err = f"{_ep} → HTTP {create_resp.status_code}, body={create_resp.text[:200]}"
+                        except Exception as _ep_err:
+                            _kling_last_err = f"{_ep} → {_ep_err}"
+                            continue
 
-                    if create_data.get("code") != 0:
+                    if create_data is None:
+                        st.error(f"❌ 所有 Kling API 端點均無法連線：{_kling_last_err}")
+                    elif create_data.get("code") != 0:
                         st.error(f"❌ 任務建立失敗：{create_data.get('message', create_data)}")
                     else:
                         task_id = create_data["data"]["task_id"]
@@ -1928,6 +1946,8 @@ else:
                                 headers={"Authorization": f"Bearer {token}"},
                                 timeout=30,
                             )
+                            if not query_resp.text.strip():
+                                continue  # 空回應，重試
                             query_data = query_resp.json()
 
                             if query_data.get("code") != 0:
