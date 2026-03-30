@@ -687,6 +687,10 @@ else:
                 img_base64 = base64.standard_b64encode(img_bytes).decode("utf-8")
                 mime_type = st.session_state.upload_mime or "image/jpeg"
 
+                _notes_block = ""
+                if product_notes:
+                    _notes_block = f"\nSPECIAL NOTES FROM USER (you MUST incorporate these into your prompts):\n{product_notes}\n"
+
                 analysis_prompt = f"""You are a professional e-commerce fashion photographer and AI image prompt engineer specializing in Korean style.
 
 Analyze this product flat lay image carefully and generate AI image generation prompts for a Korean female model wearing this product.
@@ -695,10 +699,7 @@ PRODUCT INFO (MUST appear in the generated prompts):
 - Sock type: {sock_info_en}{sock_length_desc}
 - Scene / Background: {scene_desc}
 - Outfit style: {outfit_desc_en}
-{"" if not product_notes else f"""
-SPECIAL NOTES FROM USER (you MUST incorporate these into your prompts):
-{product_notes}
-"""}
+{_notes_block}
 IMPORTANT RULES:
 - The generated positive_en prompt MUST explicitly contain these exact details:
   1. The sock type: "{sock_info_en}"
@@ -1543,6 +1544,10 @@ if len(_sel_batch) > 1 and _bp:
                 _b_scene = random.choice(SCENE_CONFIG.get(_bp["selected_scene"], ["pure white studio background, soft diffused studio lighting"]))
 
                 # ── Step 2：分析圖片產出提示詞 ──
+                _b_notes_block = ""
+                if product_notes:
+                    _b_notes_block = f"\nSPECIAL NOTES FROM USER (you MUST incorporate these into your prompts):\n{product_notes}\n"
+
                 _b_analysis_prompt = f"""You are a professional e-commerce fashion photographer and AI image prompt engineer specializing in Korean style.
 
 Analyze this product flat lay image carefully and generate AI image generation prompts for a Korean female model wearing this product.
@@ -1551,10 +1556,7 @@ PRODUCT INFO (MUST appear in the generated prompts):
 - Sock type: {_bp['sock_info_en']}{_bp['sock_length_desc']}
 - Scene / Background: {_b_scene}
 - Outfit style: {_bp['outfit_desc_en']}
-{"" if not product_notes else f"""
-SPECIAL NOTES FROM USER (you MUST incorporate these into your prompts):
-{product_notes}
-"""}
+{_b_notes_block}
 IMPORTANT RULES:
 - The generated positive_en prompt MUST explicitly contain these exact details:
   1. The sock type: "{_bp['sock_info_en']}"
