@@ -426,7 +426,7 @@ with st.sidebar:
                         kling_sk, algorithm="HS256", headers={"alg": "HS256", "typ": "JWT"}
                     )
                     _rb = _req_b.get(
-                        "https://api-singapore.klingai.com/v1/account/resource",
+                        "https://api-global.klingai.com/v1/account/resource",
                         headers={"Authorization": f"Bearer {_tok_b}"},
                         timeout=5,
                     )
@@ -1881,7 +1881,7 @@ else:
                     token = _kling_jwt(kling_ak, kling_sk)
 
                     # 發起 image-to-video 任務
-                    KLING_BASE = "https://api-singapore.klingai.com"
+                    KLING_BASE = "https://api-global.klingai.com"
                     create_resp = _requests.post(
                         f"{KLING_BASE}/v1/videos/image2video",
                         headers={
