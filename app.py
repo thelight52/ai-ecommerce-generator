@@ -2077,9 +2077,9 @@ if st.session_state.video_bytes:
 st.divider()
 
 # ─────────────────────────────────────────
-# STEP 6：電商首圖製作（文字合成到商品圖）
+# STEP 6：電商首圖製作（實穿照 + 商品去背圖 + 行銷文字）
 # ─────────────────────────────────────────
-st.markdown('<div class="step-header">Step 6 · 🏷️ 電商首圖製作（商品圖 + 行銷文字）</div>', unsafe_allow_html=True)
+st.markdown('<div class="step-header">Step 6 · 🏷️ 電商首圖製作（實穿照 + 商品圖 + 行銷文字）</div>', unsafe_allow_html=True)
 
 # Session state 初始化
 if "hero_banner_bytes" not in st.session_state:
@@ -2091,56 +2091,65 @@ if not api_key:
     st.warning("請先在左側 Sidebar 輸入 Gemini API Key")
 else:
     st.markdown(
-        '<div class="info-box">💡 上傳商品圖片並輸入行銷文字，AI 會自動分析圖片風格，'
-        '將優化後的文字融入圖片中，生成具吸引力的電商首圖。</div>',
+        '<div class="info-box">💡 選擇一張模特兒實穿照作為主視覺，搭配各顏色款式的商品去背圖，'
+        'AI 會將行銷文字與所有素材合成為專業電商首圖。</div>',
         unsafe_allow_html=True,
     )
 
-    # 圖片來源選擇
-    hero_img_source = st.radio(
-        "📷 選擇商品圖片來源",
-        ["使用 Step 1 上傳的商品圖", "另外上傳新圖片"],
-        horizontal=True,
-        key="hero_img_source",
+    # ── 區塊 A：選擇模特兒實穿照（來自 Step 3）──
+    st.markdown("#### 📷 主視覺：模特兒實穿照")
+    _s6_model_imgs = [i for i in (st.session_state.model_images or []) if i.get("bytes")]
+    _s6_selected_model_bytes = None
+
+    if _s6_model_imgs:
+        # 顯示所有實穿照供勾選
+        _s6_cols_per_row = min(len(_s6_model_imgs), 4)
+        _s6_cols = st.columns(_s6_cols_per_row)
+        for idx, img_data in enumerate(_s6_model_imgs):
+            with _s6_cols[idx % _s6_cols_per_row]:
+                st.image(img_data["bytes"], caption=img_data["label"], width=160)
+        _s6_model_labels = [img["label"] for img in _s6_model_imgs]
+        _s6_selected_label = st.radio(
+            "選擇一張實穿照作為首圖主視覺",
+            _s6_model_labels,
+            horizontal=True,
+            key="s6_model_select",
+        )
+        _s6_selected_model = next(i for i in _s6_model_imgs if i["label"] == _s6_selected_label)
+        _s6_selected_model_bytes = _s6_selected_model["bytes"]
+    else:
+        st.info("尚未生成實穿照。可先完成 Step 3，或直接上傳商品去背圖使用。")
+
+    st.markdown("---")
+
+    # ── 區塊 B：上傳商品去背圖（多張，各顏色款式）──
+    st.markdown("#### 🎨 商品去背圖（各顏色/款式白底圖）")
+    st.caption("上傳所有顏色款式的商品去背圖，AI 會將它們排列在首圖中展示。")
+    _s6_product_uploads = st.file_uploader(
+        "上傳商品去背圖（可多選）",
+        type=["jpg", "jpeg", "png", "webp"],
+        accept_multiple_files=True,
+        key="s6_product_uploads",
+        help="建議上傳白底去背的商品圖，每個顏色/款式各一張",
     )
 
-    hero_img_bytes = None
-    hero_img_mime = "image/jpeg"
+    # 預覽已上傳的去背圖
+    if _s6_product_uploads:
+        st.markdown(f"已上傳 **{len(_s6_product_uploads)}** 張商品去背圖：")
+        _s6_preview_cols = st.columns(min(len(_s6_product_uploads), 6))
+        for idx, f in enumerate(_s6_product_uploads):
+            with _s6_preview_cols[idx % len(_s6_preview_cols)]:
+                st.image(f, width=120)
 
-    if hero_img_source == "使用 Step 1 上傳的商品圖":
-        # 從 Step 1 取得圖片
-        _step1_file = None
-        if st.session_state.get("selected_files"):
-            _step1_file = st.session_state.selected_files[0]
-        elif uploaded_files:
-            _step1_file = uploaded_files[0]
+    st.markdown("---")
 
-        if _step1_file:
-            _step1_file.seek(0)
-            hero_img_bytes = _step1_file.read()
-            hero_img_mime = getattr(_step1_file, "type", "image/jpeg") or "image/jpeg"
-            _step1_file.seek(0)
-            st.image(hero_img_bytes, caption="來自 Step 1 的商品圖", width=300)
-        else:
-            st.info("尚未在 Step 1 上傳圖片，請先上傳或選擇「另外上傳新圖片」。")
-    else:
-        hero_upload = st.file_uploader(
-            "上傳商品圖片",
-            type=["jpg", "jpeg", "png", "webp"],
-            key="hero_banner_upload",
-        )
-        if hero_upload:
-            hero_img_bytes = hero_upload.getvalue()
-            hero_img_mime = hero_upload.type or "image/jpeg"
-            st.image(hero_img_bytes, caption="已上傳的商品圖", width=300)
-
-    # 行銷文字輸入
+    # ── 區塊 C：行銷文字與設計選項 ──
     col_text, col_opts = st.columns([2, 1])
     with col_text:
         hero_text = st.text_area(
             "✏️ 商品特色文字",
-            placeholder="例如：日本製純棉中筒襪\n透氣舒適 百搭必備\n限時特價 NT$199",
-            height=120,
+            placeholder="例如：日本製純棉中筒襪\n透氣舒適 百搭必備\n限時特價 NT$199\n▼黑底 ▼灰底 ▼粉底 ▼米白底 ▼白底",
+            height=140,
             key="hero_banner_text",
             help="輸入想放在首圖上的行銷文字，AI 會自動優化排版與措辭",
         )
@@ -2167,9 +2176,11 @@ else:
             key="hero_banner_lang",
         )
 
-    if hero_img_bytes and hero_text:
+    # 至少需要實穿照或去背圖其中之一
+    _has_any_image = _s6_selected_model_bytes or _s6_product_uploads
+    if _has_any_image and hero_text:
         if st.button("🏷️ 生成電商首圖", type="primary", use_container_width=False, key="btn_hero_banner"):
-            with st.spinner("AI 正在分析圖片風格並生成首圖…"):
+            with st.spinner("AI 正在合成電商首圖…"):
                 try:
                     gemini_client = genai.Client(api_key=api_key)
 
@@ -2198,11 +2209,50 @@ else:
                     elif "3:4" in hero_size:
                         size_instruction = "3:4 portrait format (768x1024)"
 
-                    hero_banner_prompt = f"""You are a professional e-commerce graphic designer and marketing consultant.
-Your task is to create an attractive e-commerce hero/banner image by integrating marketing text onto the product photo.
+                    # 動態組合 prompt 素材描述
+                    image_desc_parts = []
+                    if _s6_selected_model_bytes and _s6_product_uploads:
+                        image_desc_parts.append(
+                            "IMAGE 1 is a model wearing the product (use as the main visual / hero shot)."
+                        )
+                        for i in range(len(_s6_product_uploads)):
+                            image_desc_parts.append(
+                                f"IMAGE {i+2} is a product cutout photo on white background (color variant {i+1})."
+                            )
+                        composition_instruction = (
+                            "Place the model photo as the main visual (hero shot) — it should be the largest and most prominent element. "
+                            "Arrange the product cutout photos in a neat row or grid nearby (smaller size) to showcase all available color options. "
+                            "Each color variant can be labeled with a small color dot or text tag. "
+                            "Add a 'COLOR CHOICE' or '顏色選擇' section label above the product cutouts."
+                        )
+                    elif _s6_selected_model_bytes:
+                        image_desc_parts.append(
+                            "IMAGE 1 is a model wearing the product (use as the main visual / hero shot)."
+                        )
+                        composition_instruction = (
+                            "Use the model photo as the full main visual. "
+                            "Overlay the marketing text in a balanced layout that complements the model pose."
+                        )
+                    else:
+                        for i in range(len(_s6_product_uploads)):
+                            image_desc_parts.append(
+                                f"IMAGE {i+1} is a product cutout photo on white background (color variant {i+1})."
+                            )
+                        composition_instruction = (
+                            "Arrange all product cutout photos in an attractive layout to showcase the full color range. "
+                            "Each color variant can be labeled with a small color dot or text tag."
+                        )
 
-[DESIGN TASK]
-Take the uploaded product photo and create a polished e-commerce hero image with the following marketing text incorporated into it.
+                    images_description = "\n".join(image_desc_parts)
+
+                    hero_banner_prompt = f"""You are a professional e-commerce graphic designer and marketing consultant.
+Your task is to create an attractive e-commerce hero/listing image by compositing the provided images with marketing text.
+
+[UPLOADED IMAGES]
+{images_description}
+
+[COMPOSITION]
+{composition_instruction}
 
 [MARKETING TEXT TO ADD]
 {hero_text}
@@ -2211,31 +2261,45 @@ Take the uploaded product photo and create a polished e-commerce hero image with
 {lang_instruction}
 
 [DESIGN GUIDELINES]
-1. ANALYZE the product photo: identify its color palette, composition, lighting, and visual style.
-2. OPTIMIZE the marketing text: refine the wording to be more compelling and concise for e-commerce use.
-3. LAYOUT: Place text in areas with sufficient whitespace or simple backgrounds, ensuring it doesn't obscure the product.
-4. TYPOGRAPHY: Use {style_desc}. Choose font styles that harmonize with the image mood.
-5. COLOR: Select text colors that contrast well with the background for readability while maintaining aesthetic harmony.
-6. HIERARCHY: Main headline should be large and prominent. Sub-text (price, features) should be smaller. Use visual hierarchy to guide the viewer's eye.
+1. ANALYZE all uploaded images: identify color palettes, styles, and how they relate to each other.
+2. OPTIMIZE the marketing text: refine wording to be compelling and concise for e-commerce.
+3. LAYOUT: Create a professional e-commerce listing image composition. The model photo (if provided) is the hero visual. Product cutouts (if provided) should be arranged neatly to show all available options.
+4. TYPOGRAPHY: Use {style_desc}. Choose font styles that harmonize with the overall mood.
+5. COLOR: Select text colors that contrast well for readability while maintaining aesthetic harmony with the product colors.
+6. HIERARCHY: Main headline large and prominent. Sub-text (price, features) smaller. Color variant labels smallest.
 7. FORMAT: {size_instruction}
-8. PRODUCT FOCUS: The product must remain the visual hero — text enhances, not overwhelms.
+8. For each color variant, use a small colored circle/dot indicator or a concise text label (e.g., ▼黑底, ▼粉底) to identify each option.
 
 [QUALITY STANDARDS]
-- Text must be crisp, legible, and professionally placed
-- Design should look like a professional e-commerce platform listing image
-- Maintain visual balance between text and product
-- Ensure readability on both desktop and mobile screens
+- Professional e-commerce platform listing quality
+- Clean, organized layout with clear visual hierarchy
+- Text must be crisp, legible, and well-placed
+- Product images must not be distorted or cropped awkwardly
+- Readability on both desktop and mobile screens
 
 [AVOID]
-- Text covering the main product area
+- Text covering important product details
 - Cluttered or busy layouts
 - Hard-to-read color combinations
-- Distorting or cropping the product
-- Watermarks or placeholder text"""
+- Distorting product images
+- Watermarks or placeholder text
+- Overlapping product cutout images"""
 
-                    # 組合圖片 + prompt
-                    ref_part = types.Part.from_bytes(data=hero_img_bytes, mime_type=hero_img_mime)
-                    content_parts = [ref_part, hero_banner_prompt]
+                    # 組合所有圖片 + prompt
+                    content_parts = []
+                    if _s6_selected_model_bytes:
+                        content_parts.append(
+                            types.Part.from_bytes(data=_s6_selected_model_bytes, mime_type="image/png")
+                        )
+                    if _s6_product_uploads:
+                        for f in _s6_product_uploads:
+                            f.seek(0)
+                            _f_bytes = f.read()
+                            _f_mime = getattr(f, "type", "image/jpeg") or "image/jpeg"
+                            content_parts.append(
+                                types.Part.from_bytes(data=_f_bytes, mime_type=_f_mime)
+                            )
+                    content_parts.append(hero_banner_prompt)
 
                     response = retry_api_call(
                         gemini_client.models.generate_content,
@@ -2271,8 +2335,8 @@ Take the uploaded product photo and create a polished e-commerce hero image with
                     import traceback
                     st.error(f"❌ 首圖生成失敗：{e}")
                     st.code(traceback.format_exc(), language="text")
-    elif not hero_img_bytes:
-        st.info("👆 請先選擇或上傳商品圖片")
+    elif not _has_any_image:
+        st.info("👆 請先選擇實穿照或上傳商品去背圖")
     elif not hero_text:
         st.info("👆 請輸入想放在首圖上的行銷文字")
 
