@@ -392,7 +392,8 @@ with st.sidebar:
         st.session_state.get("cost_step2", 0.0) +
         st.session_state.get("cost_step3_total", 0.0) +
         st.session_state.get("cost_step4", 0.0) +
-        st.session_state.get("cost_step5", 0.0)
+        st.session_state.get("cost_step5", 0.0) +
+        st.session_state.get("cost_step6", 0.0)
     )
     st.metric("💰 本次累計花費", f"${_total_cost:.4f}")
 
@@ -448,6 +449,8 @@ with st.sidebar:
 2. 🔍 **分析**自動產出提示詞
 3. 🎨 **生成**模特兒實穿照
 4. ✍️ **生成**社群貼文文案
+5. 🎬 **生成**穿搭短影音
+6. 🏷️ **製作**電商首圖
 """)
     st.markdown("---")
     st.markdown("### 🤖 使用模型")
@@ -2070,6 +2073,232 @@ if st.session_state.video_bytes:
         )
     with col_vdl2:
         st.markdown(f"**影片資訊**：`{len(st.session_state.video_bytes)/1024/1024:.1f} MB`")
+
+st.divider()
+
+# ─────────────────────────────────────────
+# STEP 6：電商首圖製作（文字合成到商品圖）
+# ─────────────────────────────────────────
+st.markdown('<div class="step-header">Step 6 · 🏷️ 電商首圖製作（商品圖 + 行銷文字）</div>', unsafe_allow_html=True)
+
+# Session state 初始化
+if "hero_banner_bytes" not in st.session_state:
+    st.session_state.hero_banner_bytes = None
+if "cost_step6" not in st.session_state:
+    st.session_state.cost_step6 = 0.0
+
+if not api_key:
+    st.warning("請先在左側 Sidebar 輸入 Gemini API Key")
+else:
+    st.markdown(
+        '<div class="info-box">💡 上傳商品圖片並輸入行銷文字，AI 會自動分析圖片風格，'
+        '將優化後的文字融入圖片中，生成具吸引力的電商首圖。</div>',
+        unsafe_allow_html=True,
+    )
+
+    # 圖片來源選擇
+    hero_img_source = st.radio(
+        "📷 選擇商品圖片來源",
+        ["使用 Step 1 上傳的商品圖", "另外上傳新圖片"],
+        horizontal=True,
+        key="hero_img_source",
+    )
+
+    hero_img_bytes = None
+    hero_img_mime = "image/jpeg"
+
+    if hero_img_source == "使用 Step 1 上傳的商品圖":
+        # 從 Step 1 取得圖片
+        _step1_file = None
+        if st.session_state.get("selected_files"):
+            _step1_file = st.session_state.selected_files[0]
+        elif uploaded_files:
+            _step1_file = uploaded_files[0]
+
+        if _step1_file:
+            _step1_file.seek(0)
+            hero_img_bytes = _step1_file.read()
+            hero_img_mime = getattr(_step1_file, "type", "image/jpeg") or "image/jpeg"
+            _step1_file.seek(0)
+            st.image(hero_img_bytes, caption="來自 Step 1 的商品圖", width=300)
+        else:
+            st.info("尚未在 Step 1 上傳圖片，請先上傳或選擇「另外上傳新圖片」。")
+    else:
+        hero_upload = st.file_uploader(
+            "上傳商品圖片",
+            type=["jpg", "jpeg", "png", "webp"],
+            key="hero_banner_upload",
+        )
+        if hero_upload:
+            hero_img_bytes = hero_upload.getvalue()
+            hero_img_mime = hero_upload.type or "image/jpeg"
+            st.image(hero_img_bytes, caption="已上傳的商品圖", width=300)
+
+    # 行銷文字輸入
+    col_text, col_opts = st.columns([2, 1])
+    with col_text:
+        hero_text = st.text_area(
+            "✏️ 商品特色文字",
+            placeholder="例如：日本製純棉中筒襪\n透氣舒適 百搭必備\n限時特價 NT$199",
+            height=120,
+            key="hero_banner_text",
+            help="輸入想放在首圖上的行銷文字，AI 會自動優化排版與措辭",
+        )
+    with col_opts:
+        hero_style = st.selectbox(
+            "🎨 設計風格",
+            [
+                "簡約質感（乾淨俐落、高級感）",
+                "活潑可愛（繽紛色彩、年輕活力）",
+                "韓系文青（柔和色調、清新自然）",
+                "時尚潮流（大膽對比、視覺衝擊）",
+                "溫馨居家（暖色系、舒適療癒）",
+            ],
+            key="hero_banner_style",
+        )
+        hero_size = st.selectbox(
+            "📐 圖片尺寸",
+            ["1:1 正方形（電商主圖）", "4:3 橫式（網頁 Banner）", "3:4 直式（手機瀏覽）"],
+            key="hero_banner_size",
+        )
+        hero_lang = st.selectbox(
+            "🌐 文字語言",
+            ["繁體中文", "English", "中英混合"],
+            key="hero_banner_lang",
+        )
+
+    if hero_img_bytes and hero_text:
+        if st.button("🏷️ 生成電商首圖", type="primary", use_container_width=False, key="btn_hero_banner"):
+            with st.spinner("AI 正在分析圖片風格並生成首圖…"):
+                try:
+                    gemini_client = genai.Client(api_key=api_key)
+
+                    # 設計風格對應的英文描述
+                    style_map = {
+                        "簡約質感（乾淨俐落、高級感）": "minimalist, clean, premium luxury feel, elegant typography, muted refined color palette",
+                        "活潑可愛（繽紛色彩、年輕活力）": "playful, colorful, youthful energy, fun typography with rounded edges, vibrant candy colors",
+                        "韓系文青（柔和色調、清新自然）": "Korean aesthetic, soft pastel tones, fresh and natural, delicate serif or sans-serif font, dreamy atmosphere",
+                        "時尚潮流（大膽對比、視覺衝擊）": "bold fashion-forward, high contrast colors, impactful typography, edgy modern design, street style vibe",
+                        "溫馨居家（暖色系、舒適療癒）": "warm cozy homey feel, warm earth tones, soft rounded typography, comfortable and healing atmosphere",
+                    }
+                    style_desc = style_map.get(hero_style, "clean modern e-commerce style")
+
+                    # 語言指令
+                    lang_map = {
+                        "繁體中文": "All text on the image MUST be in Traditional Chinese (繁體中文). Use Traditional Chinese characters only.",
+                        "English": "All text on the image must be in English.",
+                        "中英混合": "Main headline in Traditional Chinese (繁體中文), with supplementary English text for style/branding.",
+                    }
+                    lang_instruction = lang_map.get(hero_lang, lang_map["繁體中文"])
+
+                    # 尺寸設定
+                    size_instruction = "1:1 square format (1024x1024)"
+                    if "4:3" in hero_size:
+                        size_instruction = "4:3 landscape format (1024x768)"
+                    elif "3:4" in hero_size:
+                        size_instruction = "3:4 portrait format (768x1024)"
+
+                    hero_banner_prompt = f"""You are a professional e-commerce graphic designer and marketing consultant.
+Your task is to create an attractive e-commerce hero/banner image by integrating marketing text onto the product photo.
+
+[DESIGN TASK]
+Take the uploaded product photo and create a polished e-commerce hero image with the following marketing text incorporated into it.
+
+[MARKETING TEXT TO ADD]
+{hero_text}
+
+[LANGUAGE REQUIREMENT]
+{lang_instruction}
+
+[DESIGN GUIDELINES]
+1. ANALYZE the product photo: identify its color palette, composition, lighting, and visual style.
+2. OPTIMIZE the marketing text: refine the wording to be more compelling and concise for e-commerce use.
+3. LAYOUT: Place text in areas with sufficient whitespace or simple backgrounds, ensuring it doesn't obscure the product.
+4. TYPOGRAPHY: Use {style_desc}. Choose font styles that harmonize with the image mood.
+5. COLOR: Select text colors that contrast well with the background for readability while maintaining aesthetic harmony.
+6. HIERARCHY: Main headline should be large and prominent. Sub-text (price, features) should be smaller. Use visual hierarchy to guide the viewer's eye.
+7. FORMAT: {size_instruction}
+8. PRODUCT FOCUS: The product must remain the visual hero — text enhances, not overwhelms.
+
+[QUALITY STANDARDS]
+- Text must be crisp, legible, and professionally placed
+- Design should look like a professional e-commerce platform listing image
+- Maintain visual balance between text and product
+- Ensure readability on both desktop and mobile screens
+
+[AVOID]
+- Text covering the main product area
+- Cluttered or busy layouts
+- Hard-to-read color combinations
+- Distorting or cropping the product
+- Watermarks or placeholder text"""
+
+                    # 組合圖片 + prompt
+                    ref_part = types.Part.from_bytes(data=hero_img_bytes, mime_type=hero_img_mime)
+                    content_parts = [ref_part, hero_banner_prompt]
+
+                    response = retry_api_call(
+                        gemini_client.models.generate_content,
+                        model="gemini-2.0-flash-exp",
+                        contents=content_parts,
+                        config=types.GenerateContentConfig(
+                            response_modalities=["IMAGE", "TEXT"],
+                            image_config=types.ImageConfig(image_size="1K"),
+                        ),
+                    )
+
+                    banner_bytes = None
+                    candidates = getattr(response, "candidates", None)
+                    if candidates and len(candidates) > 0:
+                        content = getattr(candidates[0], "content", None)
+                        parts = getattr(content, "parts", None) if content else None
+                        if parts:
+                            for part in parts:
+                                if hasattr(part, "inline_data") and part.inline_data:
+                                    banner_bytes = part.inline_data.data
+                                    break
+
+                    if banner_bytes:
+                        st.session_state.hero_banner_bytes = banner_bytes
+                        _c6 = _cost_gemini_images(1)
+                        st.session_state.cost_step6 = _c6
+                        st.success("✅ 電商首圖生成成功！")
+                        st.info(f"💰 本步驟花費：${_c6:.4f}（Gemini 圖片生成 × 1）")
+                    else:
+                        st.error("❌ 未收到生成的圖片，請重試。")
+
+                except Exception as e:
+                    import traceback
+                    st.error(f"❌ 首圖生成失敗：{e}")
+                    st.code(traceback.format_exc(), language="text")
+    elif not hero_img_bytes:
+        st.info("👆 請先選擇或上傳商品圖片")
+    elif not hero_text:
+        st.info("👆 請輸入想放在首圖上的行銷文字")
+
+# 顯示已生成的首圖
+if st.session_state.hero_banner_bytes:
+    st.markdown("### 🏷️ 電商首圖預覽")
+    banner_img = Image.open(io.BytesIO(st.session_state.hero_banner_bytes))
+    st.image(banner_img, caption="AI 生成的電商首圖", use_container_width=True)
+
+    col_bd1, col_bd2 = st.columns(2)
+    with col_bd1:
+        st.download_button(
+            label="💾 下載首圖 PNG",
+            data=st.session_state.hero_banner_bytes,
+            file_name="ecommerce_hero_image.png",
+            mime="image/png",
+            use_container_width=True,
+            key="dl_hero_banner",
+        )
+    with col_bd2:
+        _banner_size_mb = len(st.session_state.hero_banner_bytes) / 1024 / 1024
+        st.markdown(f"**圖片大小**：`{_banner_size_mb:.1f} MB` · `{banner_img.width}×{banner_img.height}`")
+
+    if st.button("🔄 重新生成", key="btn_hero_banner_retry"):
+        st.session_state.hero_banner_bytes = None
+        st.rerun()
 
 st.divider()
 
