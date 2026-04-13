@@ -680,18 +680,15 @@ else:
     }
 
     if st.button("🔍 分析圖片並自動產出提示詞", type="primary", use_container_width=False):
-        with st.spinner("Claude 正在分析商品圖片，自動生成提示詞…"):
-            try:
-                claude_client = anthropic.Anthropic(api_key=anthropic_key)
-                img_bytes = uploaded_file.getvalue()
-                img_base64 = base64.standard_b64encode(img_bytes).decode("utf-8")
-                mime_type = st.session_state.upload_mime or "image/jpeg"
+        img_bytes = uploaded_file.getvalue()
+        img_base64 = base64.standard_b64encode(img_bytes).decode("utf-8")
+        mime_type = st.session_state.upload_mime or "image/jpeg"
 
-                _notes_block = ""
-                if product_notes:
-                    _notes_block = f"\nSPECIAL NOTES FROM USER (you MUST incorporate these into your prompts):\n{product_notes}\n"
+        _notes_block = ""
+        if product_notes:
+            _notes_block = f"\nSPECIAL NOTES FROM USER (you MUST incorporate these into your prompts):\n{product_notes}\n"
 
-                analysis_prompt = f"""You are a professional e-commerce fashion photographer and AI image prompt engineer specializing in Korean style.
+        analysis_prompt = f"""You are a professional e-commerce fashion photographer and AI image prompt engineer specializing in Korean style.
 
 Analyze this product flat lay image carefully and generate AI image generation prompts for a Korean female model wearing this product.
 
@@ -723,49 +720,88 @@ Return ONLY a valid JSON object (no markdown, no extra text) with this exact str
   "negative_en": "full body, face visible, upper body dominant, extra limbs, distorted feet, deformed toes, blurry, low quality, pixelated, watermark, text overlay, logo, jpeg artifacts, overexposed, dark shadows, plastic skin, unrealistic proportions, missing product, duplicate body parts, bad anatomy, extra fingers, nsfw, wrong sock length, barefoot"
 }}"""
 
-                response = retry_api_call(
-                    claude_client.messages.create,
-                    model="claude-sonnet-4-6",
-                    max_tokens=1024,
-                    messages=[{
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": mime_type,
-                                    "data": img_base64,
-                                },
-                            },
-                            {"type": "text", "text": analysis_prompt},
-                        ],
-                    }],
-                )
+        # ── 嘗試 Claude，失敗則 fallback 到 Gemini ──
+        analysis_text = None
+        used_engine = None
+        cost_info = None
 
-                text = response.content[0].text.strip()
+        # 1) 先嘗試 Claude
+        if anthropic_key:
+            with st.spinner("Claude 正在分析商品圖片…"):
+                try:
+                    claude_client = anthropic.Anthropic(api_key=anthropic_key)
+                    response = retry_api_call(
+                        claude_client.messages.create,
+                        model="claude-sonnet-4-6",
+                        max_tokens=1024,
+                        messages=[{
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": mime_type,
+                                        "data": img_base64,
+                                    },
+                                },
+                                {"type": "text", "text": analysis_prompt},
+                            ],
+                        }],
+                    )
+                    analysis_text = response.content[0].text.strip()
+                    used_engine = "claude"
+                    _inp2 = response.usage.input_tokens
+                    _out2 = response.usage.output_tokens
+                    _c2 = _cost_claude(_inp2, _out2)
+                    cost_info = f"💰 本步驟花費：${_c2:.4f}（Input: {_inp2:,} tokens / Output: {_out2:,} tokens）"
+                    st.session_state.cost_step2 = _c2
+                except Exception as e:
+                    st.warning(f"⚠️ Claude API 失敗（{e}），嘗試使用 Gemini 分析…")
+
+        # 2) Claude 失敗或無 key → fallback 到 Gemini
+        if analysis_text is None and api_key:
+            with st.spinner("Gemini 正在分析商品圖片…"):
+                try:
+                    gemini_client = genai.Client(api_key=api_key)
+                    gemini_response = retry_api_call(
+                        gemini_client.models.generate_content,
+                        model="gemini-2.5-flash",
+                        contents=[
+                            types.Part.from_bytes(data=img_bytes, mime_type=mime_type),
+                            analysis_prompt,
+                        ],
+                    )
+                    analysis_text = gemini_response.text.strip()
+                    used_engine = "gemini"
+                except Exception as e2:
+                    st.error(f"❌ Gemini 分析也失敗：{e2}")
+
+        # 3) 無任何可用 API
+        if analysis_text is None and not api_key and not anthropic_key:
+            st.error("❌ 請先設定 Anthropic 或 Gemini API Key")
+
+        # ── 解析結果 ──
+        if analysis_text:
+            try:
+                text = analysis_text
                 if "```json" in text:
                     text = text.split("```json")[1].split("```")[0].strip()
                 elif "```" in text:
                     text = text.split("```")[1].split("```")[0].strip()
 
                 st.session_state.prompts = json.loads(text)
-                st.success("✅ 提示詞已自動生成！可在下方編輯後再生成圖片。")
-                _inp2 = response.usage.input_tokens
-                _out2 = response.usage.output_tokens
-                _c2 = _cost_claude(_inp2, _out2)
-                st.session_state.cost_step2 = _c2
-                st.info(f"💰 本步驟花費：${_c2:.4f}（Input: {_inp2:,} tokens / Output: {_out2:,} tokens）")
-
+                engine_label = "Claude" if used_engine == "claude" else "Gemini"
+                st.success(f"✅ 提示詞已自動生成（使用 {engine_label}）！可在下方編輯後再生成圖片。")
+                if cost_info:
+                    st.info(cost_info)
             except json.JSONDecodeError:
                 st.session_state.prompts = {
-                    "positive_en": response.text,
+                    "positive_en": analysis_text,
                     "positive_zh": "",
                     "negative_en": "full body, face visible, extra limbs, distorted feet, deformed toes, blurry, low quality, pixelated, watermark, text overlay, logo, jpeg artifacts, overexposed, dark shadows, plastic skin, unrealistic proportions, duplicate body parts, bad anatomy, extra fingers",
                 }
                 st.warning("⚠️ JSON 解析失敗，原始回覆已填入正向提示詞欄位，請手動調整。")
-            except Exception as e:
-                st.error(f"❌ 分析失敗：{e}")
 
 # 顯示並允許編輯提示詞
 if st.session_state.prompts:
@@ -1580,17 +1616,40 @@ Return ONLY a valid JSON object (no markdown, no extra text) with this exact str
   "negative_en": "full body, face visible, upper body dominant, extra limbs, distorted feet, deformed toes, blurry, low quality, pixelated, watermark, text overlay, logo, jpeg artifacts, overexposed, dark shadows, plastic skin, unrealistic proportions, missing product, duplicate body parts, bad anatomy, extra fingers, nsfw, wrong sock length, barefoot"
 }}"""
 
-                _b_claude = anthropic.Anthropic(api_key=_b_ak)
-                _b_resp = retry_api_call(
-                    _b_claude.messages.create,
-                    model="claude-sonnet-4-6",
-                    max_tokens=1024,
-                    messages=[{"role": "user", "content": [
-                        {"type": "image", "source": {"type": "base64", "media_type": _b_mime, "data": _b_b64}},
-                        {"type": "text", "text": _b_analysis_prompt},
-                    ]}],
-                )
-                _btext = _b_resp.content[0].text.strip()
+                # ── 嘗試 Claude，失敗則 fallback 到 Gemini ──
+                _b_analysis_text = None
+                if _b_ak:
+                    try:
+                        _b_claude = anthropic.Anthropic(api_key=_b_ak)
+                        _b_resp = retry_api_call(
+                            _b_claude.messages.create,
+                            model="claude-sonnet-4-6",
+                            max_tokens=1024,
+                            messages=[{"role": "user", "content": [
+                                {"type": "image", "source": {"type": "base64", "media_type": _b_mime, "data": _b_b64}},
+                                {"type": "text", "text": _b_analysis_prompt},
+                            ]}],
+                        )
+                        _b_analysis_text = _b_resp.content[0].text.strip()
+                    except Exception as _be:
+                        _status_b.warning(f"⚠️ Claude 失敗，切換 Gemini…（{_be}）")
+
+                if _b_analysis_text is None and _b_gk:
+                    _b_gemini = genai.Client(api_key=_b_gk)
+                    _b_gem_resp = retry_api_call(
+                        _b_gemini.models.generate_content,
+                        model="gemini-2.5-flash",
+                        contents=[
+                            types.Part.from_bytes(data=_b_bytes, mime_type=_b_mime),
+                            _b_analysis_prompt,
+                        ],
+                    )
+                    _b_analysis_text = _b_gem_resp.text.strip()
+
+                if _b_analysis_text is None:
+                    raise Exception("Claude 與 Gemini 皆無法分析圖片")
+
+                _btext = _b_analysis_text
                 if "```json" in _btext:
                     _btext = _btext.split("```json")[1].split("```")[0].strip()
                 elif "```" in _btext:
