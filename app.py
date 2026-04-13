@@ -2180,72 +2180,76 @@ else:
     _has_any_image = _s6_selected_model_bytes or _s6_product_uploads
     if _has_any_image and hero_text:
         if st.button("🏷️ 生成電商首圖", type="primary", use_container_width=False, key="btn_hero_banner"):
-            with st.spinner("AI 正在合成電商首圖…"):
-                try:
-                    gemini_client = genai.Client(api_key=api_key)
+            _s6_status = st.status("🏷️ 電商首圖生成中…", expanded=True)
+            try:
+                _s6_status.write("📋 準備素材中…")
+                _s6_img_count = (1 if _s6_selected_model_bytes else 0) + len(_s6_product_uploads or [])
+                _s6_status.write(f"共 {_s6_img_count} 張圖片 + 行銷文字")
 
-                    # 設計風格對應的英文描述
-                    style_map = {
-                        "簡約質感（乾淨俐落、高級感）": "minimalist, clean, premium luxury feel, elegant typography, muted refined color palette",
-                        "活潑可愛（繽紛色彩、年輕活力）": "playful, colorful, youthful energy, fun typography with rounded edges, vibrant candy colors",
-                        "韓系文青（柔和色調、清新自然）": "Korean aesthetic, soft pastel tones, fresh and natural, delicate serif or sans-serif font, dreamy atmosphere",
-                        "時尚潮流（大膽對比、視覺衝擊）": "bold fashion-forward, high contrast colors, impactful typography, edgy modern design, street style vibe",
-                        "溫馨居家（暖色系、舒適療癒）": "warm cozy homey feel, warm earth tones, soft rounded typography, comfortable and healing atmosphere",
-                    }
-                    style_desc = style_map.get(hero_style, "clean modern e-commerce style")
+                gemini_client = genai.Client(api_key=api_key)
 
-                    # 語言指令
-                    lang_map = {
-                        "繁體中文": "All text on the image MUST be in Traditional Chinese (繁體中文). Use Traditional Chinese characters only.",
-                        "English": "All text on the image must be in English.",
-                        "中英混合": "Main headline in Traditional Chinese (繁體中文), with supplementary English text for style/branding.",
-                    }
-                    lang_instruction = lang_map.get(hero_lang, lang_map["繁體中文"])
+                # 設計風格對應的英文描述
+                style_map = {
+                    "簡約質感（乾淨俐落、高級感）": "minimalist, clean, premium luxury feel, elegant typography, muted refined color palette",
+                    "活潑可愛（繽紛色彩、年輕活力）": "playful, colorful, youthful energy, fun typography with rounded edges, vibrant candy colors",
+                    "韓系文青（柔和色調、清新自然）": "Korean aesthetic, soft pastel tones, fresh and natural, delicate serif or sans-serif font, dreamy atmosphere",
+                    "時尚潮流（大膽對比、視覺衝擊）": "bold fashion-forward, high contrast colors, impactful typography, edgy modern design, street style vibe",
+                    "溫馨居家（暖色系、舒適療癒）": "warm cozy homey feel, warm earth tones, soft rounded typography, comfortable and healing atmosphere",
+                }
+                style_desc = style_map.get(hero_style, "clean modern e-commerce style")
 
-                    # 尺寸設定
-                    size_instruction = "1:1 square format (1024x1024)"
-                    if "4:3" in hero_size:
-                        size_instruction = "4:3 landscape format (1024x768)"
-                    elif "3:4" in hero_size:
-                        size_instruction = "3:4 portrait format (768x1024)"
+                # 語言指令
+                lang_map = {
+                    "繁體中文": "All text on the image MUST be in Traditional Chinese (繁體中文). Use Traditional Chinese characters only.",
+                    "English": "All text on the image must be in English.",
+                    "中英混合": "Main headline in Traditional Chinese (繁體中文), with supplementary English text for style/branding.",
+                }
+                lang_instruction = lang_map.get(hero_lang, lang_map["繁體中文"])
 
-                    # 動態組合 prompt 素材描述
-                    image_desc_parts = []
-                    if _s6_selected_model_bytes and _s6_product_uploads:
+                # 尺寸設定
+                size_instruction = "1:1 square format (1024x1024)"
+                if "4:3" in hero_size:
+                    size_instruction = "4:3 landscape format (1024x768)"
+                elif "3:4" in hero_size:
+                    size_instruction = "3:4 portrait format (768x1024)"
+
+                # 動態組合 prompt 素材描述
+                image_desc_parts = []
+                if _s6_selected_model_bytes and _s6_product_uploads:
+                    image_desc_parts.append(
+                        "IMAGE 1 is a model wearing the product (use as the main visual / hero shot)."
+                    )
+                    for i in range(len(_s6_product_uploads)):
                         image_desc_parts.append(
-                            "IMAGE 1 is a model wearing the product (use as the main visual / hero shot)."
+                            f"IMAGE {i+2} is a product cutout photo on white background (color variant {i+1})."
                         )
-                        for i in range(len(_s6_product_uploads)):
-                            image_desc_parts.append(
-                                f"IMAGE {i+2} is a product cutout photo on white background (color variant {i+1})."
-                            )
-                        composition_instruction = (
-                            "Place the model photo as the main visual (hero shot) — it should be the largest and most prominent element. "
-                            "Arrange the product cutout photos in a neat row or grid nearby (smaller size) to showcase all available color options. "
-                            "Each color variant can be labeled with a small color dot or text tag. "
-                            "Add a 'COLOR CHOICE' or '顏色選擇' section label above the product cutouts."
-                        )
-                    elif _s6_selected_model_bytes:
+                    composition_instruction = (
+                        "Place the model photo as the main visual (hero shot) — it should be the largest and most prominent element. "
+                        "Arrange the product cutout photos in a neat row or grid nearby (smaller size) to showcase all available color options. "
+                        "Each color variant can be labeled with a small color dot or text tag. "
+                        "Add a 'COLOR CHOICE' or '顏色選擇' section label above the product cutouts."
+                    )
+                elif _s6_selected_model_bytes:
+                    image_desc_parts.append(
+                        "IMAGE 1 is a model wearing the product (use as the main visual / hero shot)."
+                    )
+                    composition_instruction = (
+                        "Use the model photo as the full main visual. "
+                        "Overlay the marketing text in a balanced layout that complements the model pose."
+                    )
+                else:
+                    for i in range(len(_s6_product_uploads)):
                         image_desc_parts.append(
-                            "IMAGE 1 is a model wearing the product (use as the main visual / hero shot)."
+                            f"IMAGE {i+1} is a product cutout photo on white background (color variant {i+1})."
                         )
-                        composition_instruction = (
-                            "Use the model photo as the full main visual. "
-                            "Overlay the marketing text in a balanced layout that complements the model pose."
-                        )
-                    else:
-                        for i in range(len(_s6_product_uploads)):
-                            image_desc_parts.append(
-                                f"IMAGE {i+1} is a product cutout photo on white background (color variant {i+1})."
-                            )
-                        composition_instruction = (
-                            "Arrange all product cutout photos in an attractive layout to showcase the full color range. "
-                            "Each color variant can be labeled with a small color dot or text tag."
-                        )
+                    composition_instruction = (
+                        "Arrange all product cutout photos in an attractive layout to showcase the full color range. "
+                        "Each color variant can be labeled with a small color dot or text tag."
+                    )
 
-                    images_description = "\n".join(image_desc_parts)
+                images_description = "\n".join(image_desc_parts)
 
-                    hero_banner_prompt = f"""You are a professional e-commerce graphic designer and marketing consultant.
+                hero_banner_prompt = f"""You are a professional e-commerce graphic designer and marketing consultant.
 Your task is to create an attractive e-commerce hero/listing image by compositing the provided images with marketing text.
 
 [UPLOADED IMAGES]
@@ -2285,56 +2289,83 @@ Your task is to create an attractive e-commerce hero/listing image by compositin
 - Watermarks or placeholder text
 - Overlapping product cutout images"""
 
-                    # 組合所有圖片 + prompt
-                    content_parts = []
-                    if _s6_selected_model_bytes:
-                        content_parts.append(
-                            types.Part.from_bytes(data=_s6_selected_model_bytes, mime_type="image/png")
-                        )
-                    if _s6_product_uploads:
-                        for f in _s6_product_uploads:
-                            f.seek(0)
-                            _f_bytes = f.read()
-                            _f_mime = getattr(f, "type", "image/jpeg") or "image/jpeg"
-                            content_parts.append(
-                                types.Part.from_bytes(data=_f_bytes, mime_type=_f_mime)
-                            )
-                    content_parts.append(hero_banner_prompt)
-
-                    response = retry_api_call(
-                        gemini_client.models.generate_content,
-                        model="gemini-2.0-flash-exp",
-                        contents=content_parts,
-                        config=types.GenerateContentConfig(
-                            response_modalities=["IMAGE", "TEXT"],
-                            image_config=types.ImageConfig(image_size="1K"),
-                        ),
+                # 組合所有圖片 + prompt
+                _s6_status.write("🖼️ 上傳圖片到 Gemini API…")
+                content_parts = []
+                if _s6_selected_model_bytes:
+                    content_parts.append(
+                        types.Part.from_bytes(data=_s6_selected_model_bytes, mime_type="image/png")
                     )
+                    _s6_status.write("  ✅ 實穿照已加入")
+                if _s6_product_uploads:
+                    for f in _s6_product_uploads:
+                        f.seek(0)
+                        _f_bytes = f.read()
+                        _f_mime = getattr(f, "type", "image/jpeg") or "image/jpeg"
+                        content_parts.append(
+                            types.Part.from_bytes(data=_f_bytes, mime_type=_f_mime)
+                        )
+                    _s6_status.write(f"  ✅ {len(_s6_product_uploads)} 張去背圖已加入")
+                content_parts.append(hero_banner_prompt)
 
-                    banner_bytes = None
-                    candidates = getattr(response, "candidates", None)
-                    if candidates and len(candidates) > 0:
-                        content = getattr(candidates[0], "content", None)
-                        parts = getattr(content, "parts", None) if content else None
-                        if parts:
-                            for part in parts:
-                                if hasattr(part, "inline_data") and part.inline_data:
-                                    banner_bytes = part.inline_data.data
-                                    break
+                _s6_status.write("🤖 Gemini 正在生成首圖（通常需要 30～90 秒）…")
+                _s6_start_time = _time.time()
 
-                    if banner_bytes:
-                        st.session_state.hero_banner_bytes = banner_bytes
-                        _c6 = _cost_gemini_images(1)
-                        st.session_state.cost_step6 = _c6
-                        st.success("✅ 電商首圖生成成功！")
-                        st.info(f"💰 本步驟花費：${_c6:.4f}（Gemini 圖片生成 × 1）")
+                response = retry_api_call(
+                    gemini_client.models.generate_content,
+                    model="gemini-2.0-flash-exp",
+                    contents=content_parts,
+                    config=types.GenerateContentConfig(
+                        response_modalities=["IMAGE", "TEXT"],
+                        image_config=types.ImageConfig(image_size="1K"),
+                    ),
+                )
+
+                _s6_elapsed = _time.time() - _s6_start_time
+                _s6_status.write(f"📡 API 回應完成（耗時 {_s6_elapsed:.1f} 秒），正在處理結果…")
+
+                banner_bytes = None
+                _s6_text_response = ""
+                candidates = getattr(response, "candidates", None)
+                if candidates and len(candidates) > 0:
+                    content = getattr(candidates[0], "content", None)
+                    parts = getattr(content, "parts", None) if content else None
+                    if parts:
+                        for part in parts:
+                            if hasattr(part, "inline_data") and part.inline_data:
+                                banner_bytes = part.inline_data.data
+                            elif hasattr(part, "text") and part.text:
+                                _s6_text_response += part.text
                     else:
-                        st.error("❌ 未收到生成的圖片，請重試。")
+                        _s6_status.write("⚠️ API 回應中沒有 parts")
+                else:
+                    # 顯示完整回應以便 debug
+                    _s6_finish_reason = ""
+                    if candidates and len(candidates) > 0:
+                        _s6_finish_reason = getattr(candidates[0], "finish_reason", "unknown")
+                    _s6_status.write(f"⚠️ API 回應異常 — candidates 數量: {len(candidates) if candidates else 0}, finish_reason: {_s6_finish_reason}")
 
-                except Exception as e:
-                    import traceback
-                    st.error(f"❌ 首圖生成失敗：{e}")
-                    st.code(traceback.format_exc(), language="text")
+                if banner_bytes:
+                    st.session_state.hero_banner_bytes = banner_bytes
+                    _c6 = _cost_gemini_images(1)
+                    st.session_state.cost_step6 = _c6
+                    _s6_status.update(label="✅ 電商首圖生成成功！", state="complete", expanded=False)
+                    st.success("✅ 電商首圖生成成功！")
+                    st.info(f"💰 本步驟花費：${_c6:.4f}（Gemini 圖片生成 × 1，耗時 {_s6_elapsed:.1f} 秒）")
+                    if _s6_text_response:
+                        with st.expander("💬 Gemini 設計說明", expanded=False):
+                            st.markdown(_s6_text_response)
+                else:
+                    _s6_status.update(label="❌ 首圖生成失敗", state="error", expanded=True)
+                    st.error("❌ 未收到生成的圖片，請重試。")
+                    if _s6_text_response:
+                        st.warning(f"Gemini 回應文字（可能包含錯誤訊息）：\n\n{_s6_text_response}")
+
+            except Exception as e:
+                import traceback
+                _s6_status.update(label="❌ 首圖生成失敗", state="error", expanded=True)
+                st.error(f"❌ 首圖生成失敗：{e}")
+                st.code(traceback.format_exc(), language="text")
     elif not _has_any_image:
         st.info("👆 請先選擇實穿照或上傳商品去背圖")
     elif not hero_text:
