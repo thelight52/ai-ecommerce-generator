@@ -2606,6 +2606,82 @@ if show_step6 and st.session_state.hero_banner_bytes:
         st.session_state.hero_banner_bytes = None
         st.rerun()
 
+    # ── 局部修正功能 ──
+    st.markdown("---")
+    st.markdown("#### ✏️ 局部修正")
+    st.caption("對已生成的首圖進行局部調整，例如：移除某段文字、修改用詞、調整排版位置等")
+    _fix_instruction = st.text_area(
+        "請描述要修改的內容",
+        placeholder="例如：\n• 把「不是刺繡」這幾個字移除\n• 把標題改成「柔軟針織 溫柔觸感」\n• 顏色標示往右移，不要壓到腳\n• 把文字顏色改成白色",
+        height=100,
+        key="hero_fix_instruction",
+    )
+    if st.button("🔧 執行修正", type="primary", key="btn_hero_fix", disabled=not _fix_instruction.strip()):
+        _fix_status = st.status("🔧 局部修正中…", expanded=True)
+        try:
+            _fix_status.write("📋 準備原圖與修正指令…")
+            gemini_client = genai.Client(api_key=st.session_state.get("api_key", ""))
+
+            _fix_prompt = f"""You are an expert image editor. The user has an e-commerce hero image that was previously generated.
+They want to make a PARTIAL edit to this image. Keep everything else EXACTLY the same — same layout, same background, same style, same colors, same model photo.
+
+ONLY change what the user specifically asks for. Do NOT redesign the entire image.
+
+[USER'S EDIT REQUEST]
+{_fix_instruction}
+
+[RULES]
+1. Keep the overall composition, background, and style IDENTICAL to the original.
+2. ONLY modify the specific element the user mentioned.
+3. If the user asks to remove text, remove ONLY that text and fill the area naturally with the background.
+4. If the user asks to change text, replace ONLY that text while keeping the same font style and position.
+5. If the user asks to move something, move ONLY that element while keeping everything else in place.
+6. Maintain the same image dimensions and quality."""
+
+            _fix_parts = [
+                types.Part.from_bytes(
+                    data=st.session_state.hero_banner_bytes,
+                    mime_type="image/png",
+                ),
+                _fix_prompt,
+            ]
+
+            _fix_status.write("🤖 Gemini 正在修正圖片…")
+            _fix_start = _time.time()
+
+            _fix_response = retry_api_call(
+                gemini_client.models.generate_content,
+                model="gemini-3.1-flash-image-preview",
+                contents=_fix_parts,
+                config=types.GenerateContentConfig(
+                    response_modalities=["IMAGE", "TEXT"],
+                    image_config=types.ImageConfig(image_size="1K"),
+                ),
+            )
+
+            _fix_elapsed = _time.time() - _fix_start
+            _fix_bytes = None
+            candidates = getattr(_fix_response, "candidates", None)
+            if candidates and len(candidates) > 0:
+                content = getattr(candidates[0], "content", None)
+                parts = getattr(content, "parts", None) if content else None
+                if parts:
+                    for part in parts:
+                        if hasattr(part, "inline_data") and part.inline_data:
+                            _fix_bytes = part.inline_data.data
+
+            if _fix_bytes:
+                st.session_state.hero_banner_bytes = _fix_bytes
+                _fix_status.update(label="✅ 修正完成！", state="complete", expanded=False)
+                st.success(f"✅ 修正完成！（耗時 {_fix_elapsed:.1f} 秒）")
+                st.rerun()
+            else:
+                _fix_status.update(label="❌ 修正失敗", state="error")
+                st.error("❌ 修正失敗：AI 未回傳圖片，請嘗試用不同方式描述修改內容")
+        except Exception as e:
+            _fix_status.update(label="❌ 修正失敗", state="error")
+            st.error(f"❌ 修正失敗：{e}")
+
 # ─────────────────────────────────────────
 # Footer
 # ─────────────────────────────────────────
