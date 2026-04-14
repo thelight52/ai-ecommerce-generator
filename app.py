@@ -2147,11 +2147,11 @@ else:
     col_text, col_opts = st.columns([2, 1])
     with col_text:
         hero_text = st.text_area(
-            "✏️ 商品特色文字",
-            placeholder="例如：日本製純棉中筒襪\n透氣舒適 百搭必備\n限時特價 NT$199\n▼黑底 ▼灰底 ▼粉底 ▼米白底 ▼白底",
+            "✏️ 商品特色文字（選填）",
+            placeholder="例如：日本製純棉中筒襪\n透氣舒適 百搭必備\n限時特價 NT$199\n▼黑底 ▼灰底 ▼粉底 ▼米白底 ▼白底\n\n💡 留空時 AI 會自動根據商品圖片發想標題與文案",
             height=140,
             key="hero_banner_text",
-            help="輸入想放在首圖上的行銷文字，AI 會自動優化排版與措辭",
+            help="輸入想放在首圖上的行銷文字；留空的話，AI 會自動根據圖片分析商品特色並發想文案",
         )
     with col_opts:
         hero_style = st.selectbox(
@@ -2181,14 +2181,13 @@ else:
     if st.button("🏷️ 生成電商首圖", type="primary", use_container_width=False, key="btn_hero_banner"):
         if not _has_any_image:
             st.warning("⚠️ 請先選擇一張實穿照，或上傳至少一張商品去背圖。")
-        elif not hero_text:
-            st.warning("⚠️ 請輸入想放在首圖上的行銷文字。")
         else:
             _s6_status = st.status("🏷️ 電商首圖生成中…", expanded=True)
             try:
                 _s6_status.write("📋 準備素材中…")
                 _s6_img_count = (1 if _s6_selected_model_bytes else 0) + len(_s6_product_uploads or [])
-                _s6_status.write(f"共 {_s6_img_count} 張圖片 + 行銷文字")
+                _s6_text_mode = "使用者提供的行銷文字" if hero_text.strip() else "AI 自動發想文案"
+                _s6_status.write(f"共 {_s6_img_count} 張圖片 · {_s6_text_mode}")
 
                 gemini_client = genai.Client(api_key=api_key)
 
@@ -2253,6 +2252,19 @@ else:
 
                 images_description = "\n".join(image_desc_parts)
 
+                # 行銷文字區塊：有輸入就用，沒輸入讓 AI 自動發想
+                if hero_text.strip():
+                    text_block = f"""[MARKETING TEXT TO ADD]
+{hero_text}"""
+                else:
+                    text_block = """[MARKETING TEXT — AUTO GENERATE]
+The user did NOT provide specific marketing text.
+You MUST analyze the product images and automatically create compelling marketing copy, including:
+- A catchy headline that highlights the product's key feature or style
+- 1-2 short sub-headlines about material, comfort, or unique selling points
+- If multiple color variants are provided, add color labels for each variant
+Write the text in a style suitable for e-commerce product listing hero images."""
+
                 hero_banner_prompt = f"""You are a professional e-commerce graphic designer and marketing consultant.
 Your task is to create an attractive e-commerce hero/listing image by compositing the provided images with marketing text.
 
@@ -2262,15 +2274,14 @@ Your task is to create an attractive e-commerce hero/listing image by compositin
 [COMPOSITION]
 {composition_instruction}
 
-[MARKETING TEXT TO ADD]
-{hero_text}
+{text_block}
 
 [LANGUAGE REQUIREMENT]
 {lang_instruction}
 
 [DESIGN GUIDELINES]
 1. ANALYZE all uploaded images: identify color palettes, styles, and how they relate to each other.
-2. OPTIMIZE the marketing text: refine wording to be compelling and concise for e-commerce.
+2. OPTIMIZE the marketing text: refine wording to be compelling and concise for e-commerce. If no text was provided, create original marketing copy based on the product images.
 3. LAYOUT: Create a professional e-commerce listing image composition. The model photo (if provided) is the hero visual. Product cutouts (if provided) should be arranged neatly to show all available options.
 4. TYPOGRAPHY: Use {style_desc}. Choose font styles that harmonize with the overall mood.
 5. COLOR: Select text colors that contrast well for readability while maintaining aesthetic harmony with the product colors.
@@ -2317,7 +2328,7 @@ Your task is to create an attractive e-commerce hero/listing image by compositin
 
                 response = retry_api_call(
                     gemini_client.models.generate_content,
-                    model="gemini-2.0-flash-exp",
+                    model="gemini-2.0-flash-preview-image-generation",
                     contents=content_parts,
                     config=types.GenerateContentConfig(
                         response_modalities=["IMAGE", "TEXT"],
