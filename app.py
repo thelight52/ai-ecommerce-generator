@@ -2463,7 +2463,7 @@ Your task is to create an attractive e-commerce hero/listing image by compositin
 
                 response = retry_api_call(
                     gemini_client.models.generate_content,
-                    model="gemini-2.0-flash-preview-image-generation",
+                    model="gemini-2.0-flash-preview-image-generation-exp",
                     contents=content_parts,
                     config=types.GenerateContentConfig(
                         response_modalities=["IMAGE", "TEXT"],
