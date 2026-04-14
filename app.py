@@ -2318,16 +2318,22 @@ if show_step6:
             key="hero_banner_lang",
         )
     st.markdown("---")
-    st.markdown("##### 🎨 顏色呈現方式（可複選，不勾選則由 AI 自行決定）")
-    _clr_col1, _clr_col2 = st.columns(2)
-    with _clr_col1:
-        _chk_cutout = st.checkbox("🧦 去背圖並排（白邊分隔）", key="clr_cutout_row")
-        _chk_circle = st.checkbox("⚫ 圓形色塊", key="clr_circle")
-        _chk_square = st.checkbox("◼ 方形色塊", key="clr_square")
-        _chk_triangle = st.checkbox("▼ 三角色標", key="clr_triangle")
-    with _clr_col2:
-        _chk_text = st.checkbox("📝 文字標籤（白底、灰底…）", key="clr_text_label")
-        _chk_no_label = st.checkbox("❌ 不標示顏色", key="clr_no_label")
+    hero_color_style = st.selectbox(
+        "🎨 顏色呈現方式",
+        [
+            "🤖 AI 自動決定",
+            "🧦 去背圖並排＋圓形色塊＋文字",
+            "🧦 去背圖並排＋方形色塊＋文字",
+            "🧦 去背圖並排＋文字標籤",
+            "⚫ 圓形色塊＋文字",
+            "◼ 方形色塊＋文字",
+            "▼ 三角色標＋文字",
+            "📝 純文字標籤",
+            "❌ 不標示顏色",
+        ],
+        key="hero_color_style",
+        help="多張去背圖時，選擇顏色陳列的呈現方式",
+    )
 
     # 按鈕永遠顯示，點擊後驗證條件
     _has_any_image = bool(_s6_selected_model_bytes or _s6_product_uploads)
@@ -2369,49 +2375,35 @@ if show_step6:
                 elif "3:4" in hero_size:
                     size_instruction = "3:4 portrait format (768x1024)"
 
-                # 顏色標示樣式指令 — 根據勾選項目組合
-                _color_parts = []
-                if _chk_no_label:
-                    _color_parts.append("Do NOT add any color labels, color dots, color swatches, or color indicators to the image.")
+                # 顏色標示樣式指令
+                _color_size_rule = (
+                    " IMPORTANT SIZE & POSITION RULES: "
+                    "Keep the color variant section SMALL (max 20-25% of image area). "
+                    "Place it in a corner or empty space. "
+                    "NEVER overlap or cover the model's body, feet, or the product being worn. "
+                    "Product cutouts (if shown) should be thumbnail-sized."
+                )
+                _cutout_desc = (
+                    "Arrange ALL product cutout images in a neat horizontal row, thumbnail-sized. "
+                    "Each cutout must have a thin white CONTOUR outline that follows the product's shape (NOT a rectangular box frame). "
+                    "Space them evenly so all color variants are clearly visible side by side. "
+                )
+                _color_style_map = {
+                    "🧦 去背圖並排＋圓形色塊＋文字": _cutout_desc + "Below each cutout, place a FILLED CIRCULAR color swatch matching the ACTUAL product color, with a text label (e.g., 白底, 灰底).",
+                    "🧦 去背圖並排＋方形色塊＋文字": _cutout_desc + "Below each cutout, place a FILLED SQUARE color swatch matching the ACTUAL product color, with a text label (e.g., 白底, 灰底).",
+                    "🧦 去背圖並排＋文字標籤": _cutout_desc + "Below each cutout, add a short text label (e.g., 白底, 灰底). No color swatches needed.",
+                    "⚫ 圓形色塊＋文字": "Add a row of FILLED CIRCULAR color swatches, each filled with the ACTUAL product color, with a text label beside or below each (e.g., 白底, 灰底). No product cutout images needed.",
+                    "◼ 方形色塊＋文字": "Add a row of FILLED SQUARE color swatches, each filled with the ACTUAL product color, with a text label beside or below each (e.g., 白底, 灰底). No product cutout images needed.",
+                    "▼ 三角色標＋文字": "Use a downward triangle (▼) in the actual product color, followed by a text label for each variant (e.g., ▼白底 ▼灰底). Arrange in a horizontal row.",
+                    "📝 純文字標籤": "Use plain text labels to indicate color variants (e.g., 白色 / 灰色 / 黑色). No icons or color swatches.",
+                    "❌ 不標示顏色": "Do NOT add any color labels, dots, swatches, or indicators to the image.",
+                }
+                _selected_style = _color_style_map.get(hero_color_style, "")
+                if _selected_style:
+                    color_label_instruction = _selected_style + _color_size_rule
                 else:
-                    if _chk_cutout:
-                        _color_parts.append(
-                            "Arrange ALL product cutout images in a neat horizontal row. "
-                            "Each product cutout MUST have a clean white border/outline around it to visually separate it from the background. "
-                            "Space them evenly so all color variants are clearly visible side by side."
-                        )
-                    if _chk_circle:
-                        _color_parts.append(
-                            "Add FILLED CIRCULAR color swatches (solid colored circles), each filled with the ACTUAL color of the corresponding product. "
-                            "Place them below each product cutout (or in a row if no cutouts are shown)."
-                        )
-                    if _chk_square:
-                        _color_parts.append(
-                            "Add FILLED SQUARE color swatches (solid colored squares), each filled with the ACTUAL color of the corresponding product. "
-                            "Place them below each product cutout (or in a row if no cutouts are shown)."
-                        )
-                    if _chk_triangle:
-                        _color_parts.append(
-                            "Add a downward triangle symbol (▼) in the actual product color for each variant."
-                        )
-                    if _chk_text:
-                        _color_parts.append(
-                            "Add a short text label for each color variant (e.g., 白底, 灰底, 黑底), placed beside or below the color indicator."
-                        )
-
-                if _color_parts:
-                    # 加入尺寸與位置限制
-                    _color_parts.append(
-                        "IMPORTANT SIZE & POSITION RULES for the color variant display: "
-                        "- Keep the color variant section SMALL — it should occupy no more than 20-25% of the total image area. "
-                        "- Place it in a corner or empty space (e.g., bottom-right, bottom-center, or any area with open background). "
-                        "- NEVER overlap or cover the model's body, feet, or the product being worn. The model's full outfit must remain fully visible. "
-                        "- The product cutouts (if shown) should be thumbnail-sized, not large. "
-                        "- The color variant section is secondary info — the model/hero shot is the primary visual."
-                    )
-                    color_label_instruction = " ".join(_color_parts)
-                else:
-                    color_label_instruction = "You may freely decide how to label or display the color variants (e.g., color dots, text labels, or product cutout arrangement). Choose a style that best fits the overall design. Keep any color display SMALL (max 20-25% of image area), placed in a corner or empty space, and NEVER overlapping the model's body or feet."
+                    # AI 自動決定
+                    color_label_instruction = "You may freely decide how to label or display the color variants. Choose a style that best fits the overall design." + _color_size_rule
 
                 # 動態組合 prompt 素材描述
                 image_desc_parts = []
