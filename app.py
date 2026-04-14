@@ -2317,6 +2317,19 @@ if show_step6:
             ["繁體中文", "English", "中英混合"],
             key="hero_banner_lang",
         )
+        hero_color_label = st.selectbox(
+            "🎨 顏色標示樣式",
+            [
+                "⚫ 圓點＋文字（●白底 ●灰底 ●黑底）",
+                "◼ 方塊＋文字（■白底 ■灰底 ■黑底）",
+                "▼ 三角＋文字（▼白底 ▼灰底 ▼黑底）",
+                "🔵 色塊圓標（純色圓點，無文字）",
+                "📝 純文字標籤（白色 / 灰色 / 黑色）",
+                "❌ 不標示顏色",
+            ],
+            key="hero_color_label_style",
+            help="多張去背圖時，用來區分各色的標示方式",
+        )
 
     # 按鈕永遠顯示，點擊後驗證條件
     _has_any_image = bool(_s6_selected_model_bytes or _s6_product_uploads)
@@ -2358,6 +2371,17 @@ if show_step6:
                 elif "3:4" in hero_size:
                     size_instruction = "3:4 portrait format (768x1024)"
 
+                # 顏色標示樣式指令
+                color_label_map = {
+                    "⚫ 圓點＋文字（●白底 ●灰底 ●黑底）": "Use a filled colored circle (●) followed by a color name label for each variant. Example: ●白底 ●灰底 ●粉底 ●黑底. The circle color should match the actual product color.",
+                    "◼ 方塊＋文字（■白底 ■灰底 ■黑底）": "Use a filled colored square (■) followed by a color name label for each variant. Example: ■白底 ■灰底 ■粉底 ■黑底. The square color should match the actual product color.",
+                    "▼ 三角＋文字（▼白底 ▼灰底 ▼黑底）": "Use a small downward triangle (▼) followed by a color name label for each variant. Example: ▼白底 ▼灰底 ▼粉底 ▼黑底. The triangle color should match the actual product color.",
+                    "🔵 色塊圓標（純色圓點，無文字）": "Use only colored circles/dots (no text labels) below or beside each product variant to indicate the color. The dot color must match the product color accurately.",
+                    "📝 純文字標籤（白色 / 灰色 / 黑色）": "Use plain text labels separated by slashes to indicate color variants. Example: 白色 / 灰色 / 粉色 / 黑色. No icons or symbols, just clean text.",
+                    "❌ 不標示顏色": "Do NOT add any color labels, color dots, or color indicators to the image. Leave the products unlabeled.",
+                }
+                color_label_instruction = color_label_map.get(hero_color_label, color_label_map["⚫ 圓點＋文字（●白底 ●灰底 ●黑底）"])
+
                 # 動態組合 prompt 素材描述
                 image_desc_parts = []
                 if _s6_selected_model_bytes and _s6_product_uploads:
@@ -2371,7 +2395,7 @@ if show_step6:
                     composition_instruction = (
                         "Place the model photo as the main visual (hero shot) — it should be the largest and most prominent element. "
                         "Arrange the product cutout photos in a neat row or grid nearby (smaller size) to showcase all available color options. "
-                        "Each color variant can be labeled with a small color dot or text tag. "
+                        "Label each color variant according to the color label style instructions below. "
                         "Add a 'COLOR CHOICE' or '顏色選擇' section label above the product cutouts."
                     )
                 elif _s6_selected_model_bytes:
@@ -2389,7 +2413,7 @@ if show_step6:
                         )
                     composition_instruction = (
                         "Arrange all product cutout photos in an attractive layout to showcase the full color range. "
-                        "Each color variant can be labeled with a small color dot or text tag."
+                        "Label each color variant according to the color label style instructions below."
                     )
 
                 images_description = "\n".join(image_desc_parts)
@@ -2440,7 +2464,7 @@ Your task is to create an attractive e-commerce hero/listing image by compositin
 5. COLOR: Select text colors that contrast well for readability while maintaining aesthetic harmony with the product colors.
 6. HIERARCHY: Main headline large and prominent. Sub-text (price, features) smaller. Color variant labels smallest.
 7. FORMAT: {size_instruction}
-8. For each color variant, use a small colored circle/dot indicator or a concise text label (e.g., ▼黑底, ▼粉底) to identify each option.
+8. COLOR VARIANT LABELS: {color_label_instruction}
 
 [QUALITY STANDARDS]
 - Professional e-commerce platform listing quality
