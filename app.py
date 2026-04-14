@@ -2176,10 +2176,14 @@ else:
             key="hero_banner_lang",
         )
 
-    # 至少需要實穿照或去背圖其中之一
-    _has_any_image = _s6_selected_model_bytes or _s6_product_uploads
-    if _has_any_image and hero_text:
-        if st.button("🏷️ 生成電商首圖", type="primary", use_container_width=False, key="btn_hero_banner"):
+    # 按鈕永遠顯示，點擊後驗證條件
+    _has_any_image = bool(_s6_selected_model_bytes or _s6_product_uploads)
+    if st.button("🏷️ 生成電商首圖", type="primary", use_container_width=False, key="btn_hero_banner"):
+        if not _has_any_image:
+            st.warning("⚠️ 請先選擇一張實穿照，或上傳至少一張商品去背圖。")
+        elif not hero_text:
+            st.warning("⚠️ 請輸入想放在首圖上的行銷文字。")
+        else:
             _s6_status = st.status("🏷️ 電商首圖生成中…", expanded=True)
             try:
                 _s6_status.write("📋 準備素材中…")
@@ -2366,10 +2370,6 @@ Your task is to create an attractive e-commerce hero/listing image by compositin
                 _s6_status.update(label="❌ 首圖生成失敗", state="error", expanded=True)
                 st.error(f"❌ 首圖生成失敗：{e}")
                 st.code(traceback.format_exc(), language="text")
-    elif not _has_any_image:
-        st.info("👆 請先選擇實穿照或上傳商品去背圖")
-    elif not hero_text:
-        st.info("👆 請輸入想放在首圖上的行銷文字")
 
 # 顯示已生成的首圖
 if st.session_state.hero_banner_bytes:
