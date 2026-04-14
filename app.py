@@ -2317,21 +2317,17 @@ if show_step6:
             ["繁體中文", "English", "中英混合"],
             key="hero_banner_lang",
         )
-        hero_color_label = st.selectbox(
-            "🎨 顏色標示樣式",
-            [
-                "🧦 去背圖排列＋圓點文字（商品並排＋白邊＋●色標）",
-                "🧦 去背圖排列＋方塊文字（商品並排＋白邊＋■色標）",
-                "⚫ 圓點＋文字（●白底 ●灰底 ●黑底）",
-                "◼ 方塊＋文字（■白底 ■灰底 ■黑底）",
-                "▼ 三角＋文字（▼白底 ▼灰底 ▼黑底）",
-                "🔵 色塊圓標（純色圓點，無文字）",
-                "📝 純文字標籤（白色 / 灰色 / 黑色）",
-                "❌ 不標示顏色",
-            ],
-            key="hero_color_label_style",
-            help="多張去背圖時，用來區分各色的標示方式",
-        )
+    st.markdown("---")
+    st.markdown("##### 🎨 顏色呈現方式（可複選，不勾選則由 AI 自行決定）")
+    _clr_col1, _clr_col2 = st.columns(2)
+    with _clr_col1:
+        _chk_cutout = st.checkbox("🧦 去背圖並排（白邊分隔）", key="clr_cutout_row")
+        _chk_circle = st.checkbox("⚫ 圓形色塊", key="clr_circle")
+        _chk_square = st.checkbox("◼ 方形色塊", key="clr_square")
+        _chk_triangle = st.checkbox("▼ 三角色標", key="clr_triangle")
+    with _clr_col2:
+        _chk_text = st.checkbox("📝 文字標籤（白底、灰底…）", key="clr_text_label")
+        _chk_no_label = st.checkbox("❌ 不標示顏色", key="clr_no_label")
 
     # 按鈕永遠顯示，點擊後驗證條件
     _has_any_image = bool(_s6_selected_model_bytes or _s6_product_uploads)
@@ -2373,23 +2369,40 @@ if show_step6:
                 elif "3:4" in hero_size:
                     size_instruction = "3:4 portrait format (768x1024)"
 
-                # 顏色標示樣式指令
-                _color_cutout_row = (
-                    "Arrange ALL product cutout images in a neat horizontal row. "
-                    "Each product cutout MUST have a clean white border/outline around it to visually separate it from the background. "
-                    "Space them evenly so all color variants are clearly visible side by side. "
-                )
-                color_label_map = {
-                    "🧦 去背圖排列＋圓點文字（商品並排＋白邊＋●色標）": _color_cutout_row + "Below each product cutout, place a FILLED CIRCULAR color swatch (solid colored circle) matching the ACTUAL color of that product, with a short text label beside or below it (e.g., 白底, 灰底, 黑底).",
-                    "🧦 去背圖排列＋方塊文字（商品並排＋白邊＋■色標）": _color_cutout_row + "Below each product cutout, place a FILLED SQUARE color swatch (solid colored square) matching the ACTUAL color of that product, with a short text label beside or below it (e.g., 白底, 灰底, 黑底).",
-                    "⚫ 圓點＋文字（●白底 ●灰底 ●黑底）": "Add a row of FILLED CIRCULAR color swatches (solid colored circles), each filled with the ACTUAL color of the corresponding product. Place a short text label beside or below each circle (e.g., 白底, 灰底, 黑底). Arrange them in a neat horizontal row.",
-                    "◼ 方塊＋文字（■白底 ■灰底 ■黑底）": "Add a row of FILLED SQUARE color swatches (solid colored squares), each filled with the ACTUAL color of the corresponding product. Place a short text label beside or below each square (e.g., 白底, 灰底, 黑底). Arrange them in a neat horizontal row.",
-                    "▼ 三角＋文字（▼白底 ▼灰底 ▼黑底）": "Use a small downward triangle (▼) in the actual product color, followed by a color name label for each variant. Example: ▼白底 ▼灰底 ▼粉底. Arrange them in a horizontal row.",
-                    "🔵 色塊圓標（純色圓點，無文字）": "Add a row of FILLED CIRCULAR color swatches, each filled with the ACTUAL product color. Do NOT add any text labels — circles only.",
-                    "📝 純文字標籤（白色 / 灰色 / 黑色）": "Use plain text labels separated by slashes to indicate color variants. Example: 白色 / 灰色 / 粉色 / 黑色. No icons or color swatches — just clean text.",
-                    "❌ 不標示顏色": "Do NOT add any color labels, color dots, color swatches, or color indicators to the image.",
-                }
-                color_label_instruction = color_label_map.get(hero_color_label, color_label_map["⚫ 圓點＋文字（●白底 ●灰底 ●黑底）"])
+                # 顏色標示樣式指令 — 根據勾選項目組合
+                _color_parts = []
+                if _chk_no_label:
+                    _color_parts.append("Do NOT add any color labels, color dots, color swatches, or color indicators to the image.")
+                else:
+                    if _chk_cutout:
+                        _color_parts.append(
+                            "Arrange ALL product cutout images in a neat horizontal row. "
+                            "Each product cutout MUST have a clean white border/outline around it to visually separate it from the background. "
+                            "Space them evenly so all color variants are clearly visible side by side."
+                        )
+                    if _chk_circle:
+                        _color_parts.append(
+                            "Add FILLED CIRCULAR color swatches (solid colored circles), each filled with the ACTUAL color of the corresponding product. "
+                            "Place them below each product cutout (or in a row if no cutouts are shown)."
+                        )
+                    if _chk_square:
+                        _color_parts.append(
+                            "Add FILLED SQUARE color swatches (solid colored squares), each filled with the ACTUAL color of the corresponding product. "
+                            "Place them below each product cutout (or in a row if no cutouts are shown)."
+                        )
+                    if _chk_triangle:
+                        _color_parts.append(
+                            "Add a downward triangle symbol (▼) in the actual product color for each variant."
+                        )
+                    if _chk_text:
+                        _color_parts.append(
+                            "Add a short text label for each color variant (e.g., 白底, 灰底, 黑底), placed beside or below the color indicator."
+                        )
+
+                if _color_parts:
+                    color_label_instruction = " ".join(_color_parts)
+                else:
+                    color_label_instruction = "You may freely decide how to label or display the color variants (e.g., color dots, text labels, or product cutout arrangement). Choose a style that best fits the overall design."
 
                 # 動態組合 prompt 素材描述
                 image_desc_parts = []
