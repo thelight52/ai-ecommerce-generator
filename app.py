@@ -2282,11 +2282,18 @@ if show_step6:
     col_text, col_opts = st.columns([2, 1])
     with col_text:
         hero_text = st.text_area(
-            "✏️ 商品特色文字（選填）",
-            placeholder="例如：日本製純棉中筒襪\n透氣舒適 百搭必備\n限時特價 NT$199\n▼黑底 ▼灰底 ▼粉底 ▼米白底 ▼白底\n\n💡 留空時 AI 會自動根據商品圖片發想標題與文案",
-            height=140,
+            "✏️ 圖片顯示文字（選填）",
+            placeholder="例如：日本製純棉中筒襪\n透氣舒適 百搭必備\n限時特價 NT$199\n\n💡 留空時 AI 會自動根據商品圖片發想標題與文案",
+            height=100,
             key="hero_banner_text",
-            help="輸入想放在首圖上的行銷文字；留空的話，AI 會自動根據圖片分析商品特色並發想文案",
+            help="這裡輸入的文字會直接顯示在首圖上；留空的話，AI 會自動發想文案",
+        )
+        hero_note = st.text_area(
+            "📝 補充說明（不顯示在圖片上）",
+            placeholder="例如：這款是針織材質不是刺繡、主打夏季透氣、目標客群是 20-35 歲女性…",
+            height=80,
+            key="hero_banner_note",
+            help="這裡的內容只供 AI 參考，幫助它更了解商品特色，不會直接出現在圖片上",
         )
     with col_opts:
         hero_style = st.selectbox(
@@ -2389,7 +2396,7 @@ if show_step6:
 
                 # 行銷文字區塊：有輸入就用，沒輸入讓 AI 自動發想
                 if hero_text.strip():
-                    text_block = f"""[MARKETING TEXT TO ADD]
+                    text_block = f"""[MARKETING TEXT TO DISPLAY ON IMAGE]
 {hero_text}"""
                 else:
                     text_block = """[MARKETING TEXT — AUTO GENERATE]
@@ -2399,6 +2406,16 @@ You MUST analyze the product images and automatically create compelling marketin
 - 1-2 short sub-headlines about material, comfort, or unique selling points
 - If multiple color variants are provided, add color labels for each variant
 Write the text in a style suitable for e-commerce product listing hero images."""
+
+                # 補充說明區塊：僅供 AI 參考，不直接顯示在圖片上
+                note_block = ""
+                if hero_note.strip():
+                    note_block = f"""
+[ADDITIONAL CONTEXT — DO NOT display this text on the image]
+The user provided the following notes about the product for your reference only.
+Use this information to better understand the product and improve the marketing text/design,
+but do NOT put this text directly on the image:
+{hero_note}"""
 
                 hero_banner_prompt = f"""You are a professional e-commerce graphic designer and marketing consultant.
 Your task is to create an attractive e-commerce hero/listing image by compositing the provided images with marketing text.
@@ -2410,6 +2427,7 @@ Your task is to create an attractive e-commerce hero/listing image by compositin
 {composition_instruction}
 
 {text_block}
+{note_block}
 
 [LANGUAGE REQUIREMENT]
 {lang_instruction}
