@@ -2372,13 +2372,18 @@ if show_step6:
                     size_instruction = "3:4 portrait format (768x1024)"
 
                 # 顏色標示樣式指令
+                _color_layout_base = (
+                    "Arrange ALL product cutout images in a neat horizontal row. "
+                    "Each product cutout MUST have a clean white border/outline around it to visually separate it from the background. "
+                    "Space them evenly so all color variants are clearly visible side by side. "
+                )
                 color_label_map = {
-                    "⚫ 圓點＋文字（●白底 ●灰底 ●黑底）": "Below the product variants, draw a row of FILLED CIRCULAR color swatches (solid colored circles). Each circle must be filled with the ACTUAL color of the corresponding product (e.g., white circle for white product, black circle for black product, light blue circle for light blue product). Below or beside each colored circle, add a short text label (e.g., 白底, 灰底, 黑底). The circles should be evenly spaced in a neat horizontal row.",
-                    "◼ 方塊＋文字（■白底 ■灰底 ■黑底）": "Below the product variants, draw a row of FILLED SQUARE color swatches (solid colored squares). Each square must be filled with the ACTUAL color of the corresponding product (e.g., white square for white product, black square for black product). Below or beside each colored square, add a short text label (e.g., 白底, 灰底, 黑底). The squares should be evenly spaced in a neat horizontal row.",
-                    "▼ 三角＋文字（▼白底 ▼灰底 ▼黑底）": "Use a small downward triangle symbol (▼) in the actual product color, followed by a color name label for each variant. Example: ▼白底 ▼灰底 ▼粉底 ▼黑底. Arrange them in a horizontal row.",
-                    "🔵 色塊圓標（純色圓點，無文字）": "Below the product variants, draw a row of FILLED CIRCULAR color swatches ONLY (no text labels). Each circle must be filled with the ACTUAL color of the corresponding product. The circles should be evenly spaced in a neat horizontal row. Do NOT add any text labels next to the circles.",
-                    "📝 純文字標籤（白色 / 灰色 / 黑色）": "Use plain text labels separated by slashes to indicate color variants. Example: 白色 / 灰色 / 粉色 / 黑色. No icons, symbols, or color swatches — just clean text.",
-                    "❌ 不標示顏色": "Do NOT add any color labels, color dots, color swatches, or color indicators to the image. Leave the products unlabeled.",
+                    "⚫ 圓點＋文字（●白底 ●灰底 ●黑底）": _color_layout_base + "Below each product cutout, place a FILLED CIRCULAR color swatch (solid colored circle) matching the ACTUAL color of that product, with a short text label beside or below it (e.g., 白底, 灰底, 黑底).",
+                    "◼ 方塊＋文字（■白底 ■灰底 ■黑底）": _color_layout_base + "Below each product cutout, place a FILLED SQUARE color swatch (solid colored square) matching the ACTUAL color of that product, with a short text label beside or below it (e.g., 白底, 灰底, 黑底).",
+                    "▼ 三角＋文字（▼白底 ▼灰底 ▼黑底）": _color_layout_base + "Below each product cutout, place a small downward triangle (▼) in the actual product color, followed by a color name label (e.g., ▼白底 ▼灰底 ▼粉底).",
+                    "🔵 色塊圓標（純色圓點，無文字）": _color_layout_base + "Below each product cutout, place a FILLED CIRCULAR color swatch matching the ACTUAL product color. Do NOT add any text labels — circles only.",
+                    "📝 純文字標籤（白色 / 灰色 / 黑色）": _color_layout_base + "Below the row of product cutouts, add plain text labels (e.g., 白色 / 灰色 / 粉色 / 黑色). No icons or color swatches — just clean text.",
+                    "❌ 不標示顏色": _color_layout_base + "Do NOT add any color labels, dots, or indicators. Show the product cutouts only.",
                 }
                 color_label_instruction = color_label_map.get(hero_color_label, color_label_map["⚫ 圓點＋文字（●白底 ●灰底 ●黑底）"])
 
