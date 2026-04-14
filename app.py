@@ -2320,6 +2320,8 @@ if show_step6:
         hero_color_label = st.selectbox(
             "🎨 顏色標示樣式",
             [
+                "🧦 去背圖排列＋圓點文字（商品並排＋白邊＋●色標）",
+                "🧦 去背圖排列＋方塊文字（商品並排＋白邊＋■色標）",
                 "⚫ 圓點＋文字（●白底 ●灰底 ●黑底）",
                 "◼ 方塊＋文字（■白底 ■灰底 ■黑底）",
                 "▼ 三角＋文字（▼白底 ▼灰底 ▼黑底）",
@@ -2372,18 +2374,20 @@ if show_step6:
                     size_instruction = "3:4 portrait format (768x1024)"
 
                 # 顏色標示樣式指令
-                _color_layout_base = (
+                _color_cutout_row = (
                     "Arrange ALL product cutout images in a neat horizontal row. "
                     "Each product cutout MUST have a clean white border/outline around it to visually separate it from the background. "
                     "Space them evenly so all color variants are clearly visible side by side. "
                 )
                 color_label_map = {
-                    "⚫ 圓點＋文字（●白底 ●灰底 ●黑底）": _color_layout_base + "Below each product cutout, place a FILLED CIRCULAR color swatch (solid colored circle) matching the ACTUAL color of that product, with a short text label beside or below it (e.g., 白底, 灰底, 黑底).",
-                    "◼ 方塊＋文字（■白底 ■灰底 ■黑底）": _color_layout_base + "Below each product cutout, place a FILLED SQUARE color swatch (solid colored square) matching the ACTUAL color of that product, with a short text label beside or below it (e.g., 白底, 灰底, 黑底).",
-                    "▼ 三角＋文字（▼白底 ▼灰底 ▼黑底）": _color_layout_base + "Below each product cutout, place a small downward triangle (▼) in the actual product color, followed by a color name label (e.g., ▼白底 ▼灰底 ▼粉底).",
-                    "🔵 色塊圓標（純色圓點，無文字）": _color_layout_base + "Below each product cutout, place a FILLED CIRCULAR color swatch matching the ACTUAL product color. Do NOT add any text labels — circles only.",
-                    "📝 純文字標籤（白色 / 灰色 / 黑色）": _color_layout_base + "Below the row of product cutouts, add plain text labels (e.g., 白色 / 灰色 / 粉色 / 黑色). No icons or color swatches — just clean text.",
-                    "❌ 不標示顏色": _color_layout_base + "Do NOT add any color labels, dots, or indicators. Show the product cutouts only.",
+                    "🧦 去背圖排列＋圓點文字（商品並排＋白邊＋●色標）": _color_cutout_row + "Below each product cutout, place a FILLED CIRCULAR color swatch (solid colored circle) matching the ACTUAL color of that product, with a short text label beside or below it (e.g., 白底, 灰底, 黑底).",
+                    "🧦 去背圖排列＋方塊文字（商品並排＋白邊＋■色標）": _color_cutout_row + "Below each product cutout, place a FILLED SQUARE color swatch (solid colored square) matching the ACTUAL color of that product, with a short text label beside or below it (e.g., 白底, 灰底, 黑底).",
+                    "⚫ 圓點＋文字（●白底 ●灰底 ●黑底）": "Add a row of FILLED CIRCULAR color swatches (solid colored circles), each filled with the ACTUAL color of the corresponding product. Place a short text label beside or below each circle (e.g., 白底, 灰底, 黑底). Arrange them in a neat horizontal row.",
+                    "◼ 方塊＋文字（■白底 ■灰底 ■黑底）": "Add a row of FILLED SQUARE color swatches (solid colored squares), each filled with the ACTUAL color of the corresponding product. Place a short text label beside or below each square (e.g., 白底, 灰底, 黑底). Arrange them in a neat horizontal row.",
+                    "▼ 三角＋文字（▼白底 ▼灰底 ▼黑底）": "Use a small downward triangle (▼) in the actual product color, followed by a color name label for each variant. Example: ▼白底 ▼灰底 ▼粉底. Arrange them in a horizontal row.",
+                    "🔵 色塊圓標（純色圓點，無文字）": "Add a row of FILLED CIRCULAR color swatches, each filled with the ACTUAL product color. Do NOT add any text labels — circles only.",
+                    "📝 純文字標籤（白色 / 灰色 / 黑色）": "Use plain text labels separated by slashes to indicate color variants. Example: 白色 / 灰色 / 粉色 / 黑色. No icons or color swatches — just clean text.",
+                    "❌ 不標示顏色": "Do NOT add any color labels, color dots, color swatches, or color indicators to the image.",
                 }
                 color_label_instruction = color_label_map.get(hero_color_label, color_label_map["⚫ 圓點＋文字（●白底 ●灰底 ●黑底）"])
 
