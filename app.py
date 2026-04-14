@@ -2400,9 +2400,18 @@ if show_step6:
                         )
 
                 if _color_parts:
+                    # 加入尺寸與位置限制
+                    _color_parts.append(
+                        "IMPORTANT SIZE & POSITION RULES for the color variant display: "
+                        "- Keep the color variant section SMALL — it should occupy no more than 20-25% of the total image area. "
+                        "- Place it in a corner or empty space (e.g., bottom-right, bottom-center, or any area with open background). "
+                        "- NEVER overlap or cover the model's body, feet, or the product being worn. The model's full outfit must remain fully visible. "
+                        "- The product cutouts (if shown) should be thumbnail-sized, not large. "
+                        "- The color variant section is secondary info — the model/hero shot is the primary visual."
+                    )
                     color_label_instruction = " ".join(_color_parts)
                 else:
-                    color_label_instruction = "You may freely decide how to label or display the color variants (e.g., color dots, text labels, or product cutout arrangement). Choose a style that best fits the overall design."
+                    color_label_instruction = "You may freely decide how to label or display the color variants (e.g., color dots, text labels, or product cutout arrangement). Choose a style that best fits the overall design. Keep any color display SMALL (max 20-25% of image area), placed in a corner or empty space, and NEVER overlapping the model's body or feet."
 
                 # 動態組合 prompt 素材描述
                 image_desc_parts = []
