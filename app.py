@@ -2377,16 +2377,20 @@ if show_step6:
 
                 # 顏色標示樣式指令
                 _color_size_rule = (
-                    " IMPORTANT SIZE & POSITION RULES: "
-                    "Keep the color variant section SMALL (max 20-25% of image area). "
-                    "Place it in a corner or empty space. "
-                    "NEVER overlap or cover the model's body, feet, or the product being worn. "
-                    "Product cutouts (if shown) should be thumbnail-sized."
+                    " CRITICAL SIZE & POSITION RULES: "
+                    "The color variant section must be VERY SMALL — maximum 10-15% of the total image area. "
+                    "Each product cutout thumbnail (if shown) should be no taller than 10-12% of the image height. "
+                    "Color swatch circles/squares should be TINY (about 2-3% of image width each). "
+                    "Text labels should use a small font size. "
+                    "Place the entire color section in a bottom corner or along the bottom edge, in an empty/background area. "
+                    "NEVER overlap or cover the model's body, feet, shoes, or the product being worn. "
+                    "The model/hero shot is the PRIMARY visual and must dominate the image."
                 )
                 _cutout_desc = (
-                    "Arrange ALL product cutout images in a neat horizontal row, thumbnail-sized. "
+                    "Arrange ALL product cutout images in a neat horizontal row. "
+                    "Each cutout must be VERY SMALL (thumbnail-sized, no taller than 10-12% of image height). "
                     "Each cutout must have a thin white CONTOUR outline that follows the product's shape (NOT a rectangular box frame). "
-                    "Space them evenly so all color variants are clearly visible side by side. "
+                    "Space them evenly in a compact row. "
                 )
                 _color_style_map = {
                     "🧦 去背圖並排＋圓形色塊＋文字": _cutout_desc + "Below each cutout, place a FILLED CIRCULAR color swatch matching the ACTUAL product color, with a text label (e.g., 白底, 灰底).",
