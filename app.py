@@ -443,6 +443,22 @@ with st.sidebar:
             st.markdown("[🔗 kling.ai/dev/resource-pack-manage](https://kling.ai/dev/resource-pack-manage)")
 
     st.markdown("---")
+
+    # ── 側邊導航 ──
+    st.markdown("### 🧭 快速導航")
+    nav_mode = st.radio(
+        "選擇執行模式",
+        [
+            "🔄 完整流程（Step 1→6）",
+            "✍️ Step 4 · 社群文案",
+            "🎬 Step 5 · 穿搭影音",
+            "🏷️ Step 6 · 電商首圖",
+        ],
+        key="nav_mode",
+        label_visibility="collapsed",
+    )
+    st.markdown("---")
+
     st.markdown("### 📋 流程說明")
     st.markdown("""
 1. 🖼️ **上傳**平拍照
@@ -477,6 +493,19 @@ if "batch_results" not in st.session_state:
     st.session_state.batch_results = []
 
 # ─────────────────────────────────────────
+# 導航模式判斷
+# ─────────────────────────────────────────
+_nav = st.session_state.get("nav_mode", "🔄 完整流程（Step 1→6）")
+_is_full = _nav.startswith("🔄")
+show_step1 = _is_full
+show_step2 = _is_full
+show_step3 = _is_full
+show_step4 = _is_full or "Step 4" in _nav
+show_step5 = _is_full or "Step 5" in _nav
+show_step6 = _is_full or "Step 6" in _nav
+show_batch = _is_full
+
+# ─────────────────────────────────────────
 # 主標題
 # ─────────────────────────────────────────
 st.title("🧦 AI 電商素材生成器")
@@ -486,19 +515,11 @@ st.divider()
 # ─────────────────────────────────────────
 # STEP 1：上傳平拍照
 # ─────────────────────────────────────────
-st.markdown('<div class="step-header">Step 1 · 🖼️ 上傳商品平拍照</div>', unsafe_allow_html=True)
 
-# 範例圖片檔案路徑
+# 範例圖片檔案路徑（全域）
 SAMPLE_IMAGE_PATH = pathlib.Path(__file__).parent / "test_product.jpg"
 
-uploaded_files = st.file_uploader(
-    "選擇商品平拍圖片（支援 JPG / PNG / WEBP，可多選）",
-    type=["jpg", "jpeg", "png", "webp"],
-    accept_multiple_files=True,
-    help="建議使用清晰、白底或淺色背景的商品平拍照；可一次上傳多張，再用下方選擇器挑選要處理的一張"
-)
-
-# MockUploadedFile：模擬 Streamlit UploadedFile 介面
+# MockUploadedFile：模擬 Streamlit UploadedFile 介面（全域）
 class _MockFile:
     def __init__(self, data, name, mime_type):
         self._data = data
@@ -510,331 +531,341 @@ class _MockFile:
     def seek(self, pos): pass
 
 uploaded_file = None
+product_notes = ""
 
-# 多張上傳：縮圖網格 + checkbox 多選
-if uploaded_files:
-    n_uploaded = len(uploaded_files)
-    if n_uploaded == 1:
-        uploaded_file = uploaded_files[0]
-        st.session_state.selected_files = [uploaded_files[0]]
-    else:
-        st.markdown(f"**已上傳 {n_uploaded} 張圖片，請勾選要處理的圖片：**")
+if show_step1:
+    st.markdown('<div class="step-header">Step 1 · 🖼️ 上傳商品平拍照</div>', unsafe_allow_html=True)
 
-        # 當上傳的檔案清單改變時，重置選取狀態
-        _files_key = tuple(f.name for f in uploaded_files)
-        if st.session_state.get("_uploaded_files_key") != _files_key:
-            st.session_state["_uploaded_files_key"] = _files_key
-            for _ci in range(n_uploaded):
-                st.session_state[f"check_img_{_ci}"] = True
-            st.session_state["_select_all_cb"] = True
-
-        # 全選 callback
-        def _on_select_all_change():
-            _val = st.session_state.get("_select_all_cb", True)
-            for _j in range(n_uploaded):
-                st.session_state[f"check_img_{_j}"] = _val
-
-        st.checkbox("✅ 全選", key="_select_all_cb", on_change=_on_select_all_change)
-
-        # 縮圖網格 + 個別 checkbox
-        _cols_n = min(n_uploaded, 4)
-        _thumb_cols = st.columns(_cols_n)
-        _selected_files = []
-        for _ci, _cf in enumerate(uploaded_files):
-            with _thumb_cols[_ci % _cols_n]:
-                st.image(_cf.getvalue(), use_container_width=True)
-                if st.checkbox(_cf.name, key=f"check_img_{_ci}"):
-                    _selected_files.append(_cf)
-
-        st.session_state.selected_files = _selected_files
-
-        if _selected_files:
-            _n_sel = len(_selected_files)
-            _mode = "批次處理模式" if _n_sel > 1 else "單張處理模式"
-            st.markdown(f"**已選 {_n_sel}/{n_uploaded} 張**（{_mode}）")
-            uploaded_file = _selected_files[0]
-        else:
-            st.warning("⚠️ 請至少選擇一張圖片")
-
-# 若未上傳，提供範例圖片按鈕
-if not uploaded_file:
-    if SAMPLE_IMAGE_PATH.exists():
-        if st.button("🧦 使用範例圖片（襪子平拍照）", type="secondary"):
-            st.session_state["sample_bytes"] = SAMPLE_IMAGE_PATH.read_bytes()
-            st.rerun()
-    else:
-        st.info("💡 請上傳一張襪子商品平拍照開始使用")
-
-# 若 session 中有範例圖
-if not uploaded_file and st.session_state.get("sample_bytes"):
-    uploaded_file = _MockFile(st.session_state["sample_bytes"], "sample_sock.jpg", "image/jpeg")
-
-if uploaded_file:
-    st.session_state.upload_mime = uploaded_file.type or "image/jpeg"
-    col_img, col_info = st.columns([1, 2])
-    with col_img:
-        st.image(uploaded_file.getvalue(), caption="📸 已選擇的圖片", use_container_width=True)
-    with col_info:
-        st.markdown('<div class="success-box">✅ 圖片已選擇，可繼續下一步</div>', unsafe_allow_html=True)
-        st.markdown(f"- **檔名**：`{uploaded_file.name}`")
-        st.markdown(f"- **大小**：`{uploaded_file.size / 1024:.1f} KB`")
-        st.markdown(f"- **格式**：`{uploaded_file.type}`")
-
-    product_notes = st.text_area(
-        "📝 商品注意事項（選填）",
-        placeholder="例如：這款襪子花色偏淡，場景不要太暗；襪口有蕾絲邊設計請特別展示；此為兒童襪請用年輕活潑風格…",
-        help="輸入任何關於這款襪子的特殊說明，Claude 會在 Step 2 自動將這些注意事項融入提示詞中",
-        key="product_notes",
+    uploaded_files = st.file_uploader(
+        "選擇商品平拍圖片（支援 JPG / PNG / WEBP，可多選）",
+        type=["jpg", "jpeg", "png", "webp"],
+        accept_multiple_files=True,
+        help="建議使用清晰、白底或淺色背景的商品平拍照；可一次上傳多張，再用下方選擇器挑選要處理的一張"
     )
-else:
-    product_notes = ""
 
-st.divider()
+    # 多張上傳：縮圖網格 + checkbox 多選
+    if uploaded_files:
+        n_uploaded = len(uploaded_files)
+        if n_uploaded == 1:
+            uploaded_file = uploaded_files[0]
+            st.session_state.selected_files = [uploaded_files[0]]
+        else:
+            st.markdown(f"**已上傳 {n_uploaded} 張圖片，請勾選要處理的圖片：**")
+
+            # 當上傳的檔案清單改變時，重置選取狀態
+            _files_key = tuple(f.name for f in uploaded_files)
+            if st.session_state.get("_uploaded_files_key") != _files_key:
+                st.session_state["_uploaded_files_key"] = _files_key
+                for _ci in range(n_uploaded):
+                    st.session_state[f"check_img_{_ci}"] = True
+                st.session_state["_select_all_cb"] = True
+
+            # 全選 callback
+            def _on_select_all_change():
+                _val = st.session_state.get("_select_all_cb", True)
+                for _j in range(n_uploaded):
+                    st.session_state[f"check_img_{_j}"] = _val
+
+            st.checkbox("✅ 全選", key="_select_all_cb", on_change=_on_select_all_change)
+
+            # 縮圖網格 + 個別 checkbox
+            _cols_n = min(n_uploaded, 4)
+            _thumb_cols = st.columns(_cols_n)
+            _selected_files = []
+            for _ci, _cf in enumerate(uploaded_files):
+                with _thumb_cols[_ci % _cols_n]:
+                    st.image(_cf.getvalue(), use_container_width=True)
+                    if st.checkbox(_cf.name, key=f"check_img_{_ci}"):
+                        _selected_files.append(_cf)
+
+            st.session_state.selected_files = _selected_files
+
+            if _selected_files:
+                _n_sel = len(_selected_files)
+                _mode = "批次處理模式" if _n_sel > 1 else "單張處理模式"
+                st.markdown(f"**已選 {_n_sel}/{n_uploaded} 張**（{_mode}）")
+                uploaded_file = _selected_files[0]
+            else:
+                st.warning("⚠️ 請至少選擇一張圖片")
+
+    # 若未上傳，提供範例圖片按鈕
+    if not uploaded_file:
+        if SAMPLE_IMAGE_PATH.exists():
+            if st.button("🧦 使用範例圖片（襪子平拍照）", type="secondary"):
+                st.session_state["sample_bytes"] = SAMPLE_IMAGE_PATH.read_bytes()
+                st.rerun()
+        else:
+            st.info("💡 請上傳一張襪子商品平拍照開始使用")
+
+    # 若 session 中有範例圖
+    if not uploaded_file and st.session_state.get("sample_bytes"):
+        uploaded_file = _MockFile(st.session_state["sample_bytes"], "sample_sock.jpg", "image/jpeg")
+
+    if uploaded_file:
+        st.session_state.upload_mime = uploaded_file.type or "image/jpeg"
+        col_img, col_info = st.columns([1, 2])
+        with col_img:
+            st.image(uploaded_file.getvalue(), caption="📸 已選擇的圖片", use_container_width=True)
+        with col_info:
+            st.markdown('<div class="success-box">✅ 圖片已選擇，可繼續下一步</div>', unsafe_allow_html=True)
+            st.markdown(f"- **檔名**：`{uploaded_file.name}`")
+            st.markdown(f"- **大小**：`{uploaded_file.size / 1024:.1f} KB`")
+            st.markdown(f"- **格式**：`{uploaded_file.type}`")
+
+        product_notes = st.text_area(
+            "📝 商品注意事項（選填）",
+            placeholder="例如：這款襪子花色偏淡，場景不要太暗；襪口有蕾絲邊設計請特別展示；此為兒童襪請用年輕活潑風格…",
+            help="輸入任何關於這款襪子的特殊說明，Claude 會在 Step 2 自動將這些注意事項融入提示詞中",
+            key="product_notes",
+        )
+
+    st.divider()
 
 # ─────────────────────────────────────────
 # STEP 2：自動產出提示詞
 # ─────────────────────────────────────────
-st.markdown('<div class="step-header">Step 2 · 🔍 自動分析並產出提示詞</div>', unsafe_allow_html=True)
+if show_step2:
+    st.markdown('<div class="step-header">Step 2 · 🔍 自動分析並產出提示詞</div>', unsafe_allow_html=True)
 
-if not uploaded_file:
-    st.info("請先完成 Step 1 上傳圖片")
-elif not anthropic_key:
-    st.warning("請先在左側 Sidebar 輸入 Anthropic API Key")
-else:
-    # ── 場景選擇（7 種場景，每種有 2 組隨機腳本） ──
-    scene_options = SCENE_CONFIG
-    selected_scene = st.selectbox("🏠 選擇場景", list(scene_options.keys()))
-    st.session_state.selected_scene = selected_scene
+    if not uploaded_file:
+        st.info("請先完成 Step 1 上傳圖片")
+    elif not anthropic_key:
+        st.warning("請先在左側 Sidebar 輸入 Anthropic API Key")
+    else:
+        # ── 場景選擇（7 種場景，每種有 2 組隨機腳本） ──
+        scene_options = SCENE_CONFIG
+        selected_scene = st.selectbox("🏠 選擇場景", list(scene_options.keys()))
+        st.session_state.selected_scene = selected_scene
 
-    # ── 穿搭風格選擇 ──
-    OUTFIT_STYLES = {
-        "T恤 + 百褶短裙（甜美韓系）": (
-            "wearing a soft pastel short-sleeve T-shirt tucked into a pleated mini skirt, "
-            "white canvas sneakers, sweet Korean girl-next-door style"
-        ),
-        "針織衫 + A字裙（溫柔氣質）": (
-            "wearing a delicate knit cardigan or short-sleeve knit top with an A-line midi skirt, "
-            "Mary Jane shoes or loafers, elegant and feminine Korean style"
-        ),
-        "衛衣 + 寬褲（休閒街頭）": (
-            "wearing an oversized cropped hoodie or sweatshirt with wide-leg pants or joggers, "
-            "chunky sneakers or platform shoes, casual Korean streetwear style"
-        ),
-        "襯衫 + 牛仔短褲（清新日常）": (
-            "wearing a crisp button-down shirt (tucked in or tied at waist) with denim shorts, "
-            "white sneakers or slip-on shoes, fresh and casual everyday Korean look"
-        ),
-        "背心洋裝（簡約一件式）": (
-            "wearing a sleeveless mini dress or pinafore dress over a simple inner top, "
-            "flat sandals or canvas shoes, minimalist one-piece Korean outfit"
-        ),
-        "運動套裝（活力元氣）": (
-            "wearing a sporty cropped zip-up jacket or sports bra top with bike shorts or track pants, "
-            "athletic running shoes, energetic Korean athleisure style"
-        ),
-    }
-    selected_outfit = st.selectbox("👗 穿搭風格", list(OUTFIT_STYLES.keys()), key="outfit_style")
-    outfit_desc_en = OUTFIT_STYLES[selected_outfit]
-    st.session_state.selected_outfit = selected_outfit
-    st.session_state.outfit_desc_en = outfit_desc_en
+        # ── 穿搭風格選擇 ──
+        OUTFIT_STYLES = {
+            "T恤 + 百褶短裙（甜美韓系）": (
+                "wearing a soft pastel short-sleeve T-shirt tucked into a pleated mini skirt, "
+                "white canvas sneakers, sweet Korean girl-next-door style"
+            ),
+            "針織衫 + A字裙（溫柔氣質）": (
+                "wearing a delicate knit cardigan or short-sleeve knit top with an A-line midi skirt, "
+                "Mary Jane shoes or loafers, elegant and feminine Korean style"
+            ),
+            "衛衣 + 寬褲（休閒街頭）": (
+                "wearing an oversized cropped hoodie or sweatshirt with wide-leg pants or joggers, "
+                "chunky sneakers or platform shoes, casual Korean streetwear style"
+            ),
+            "襯衫 + 牛仔短褲（清新日常）": (
+                "wearing a crisp button-down shirt (tucked in or tied at waist) with denim shorts, "
+                "white sneakers or slip-on shoes, fresh and casual everyday Korean look"
+            ),
+            "背心洋裝（簡約一件式）": (
+                "wearing a sleeveless mini dress or pinafore dress over a simple inner top, "
+                "flat sandals or canvas shoes, minimalist one-piece Korean outfit"
+            ),
+            "運動套裝（活力元氣）": (
+                "wearing a sporty cropped zip-up jacket or sports bra top with bike shorts or track pants, "
+                "athletic running shoes, energetic Korean athleisure style"
+            ),
+        }
+        selected_outfit = st.selectbox("👗 穿搭風格", list(OUTFIT_STYLES.keys()), key="outfit_style")
+        outfit_desc_en = OUTFIT_STYLES[selected_outfit]
+        st.session_state.selected_outfit = selected_outfit
+        st.session_state.outfit_desc_en = outfit_desc_en
 
-    # ── 襪子資訊欄位 ──
-    col_sock1, col_sock2 = st.columns(2)
-    with col_sock1:
-        sock_type = st.selectbox(
-            "🧦 襪子類型",
-            [
-                "長襪 — 小腿肚以上",
-                "中筒襪 — 腳踝以上，小腿肚以下",
-                "短襪 — 剛好蓋過腳踝",
-                "隱形襪 — 露出腳踝",
-            ],
-        )
-    with col_sock2:
-        sock_length = st.text_input(
-            "📏 襪筒長度",
-            placeholder="例：25cm、膝下10cm",
-            help="輸入襪子的實際長度或相對位置描述"
-        )
+        # ── 襪子資訊欄位 ──
+        col_sock1, col_sock2 = st.columns(2)
+        with col_sock1:
+            sock_type = st.selectbox(
+                "🧦 襪子類型",
+                [
+                    "長襪 — 小腿肚以上",
+                    "中筒襪 — 腳踝以上，小腿肚以下",
+                    "短襪 — 剛好蓋過腳踝",
+                    "隱形襪 — 露出腳踝",
+                ],
+            )
+        with col_sock2:
+            sock_length = st.text_input(
+                "📏 襪筒長度",
+                placeholder="例：25cm、膝下10cm",
+                help="輸入襪子的實際長度或相對位置描述"
+            )
 
-    # ── 襪子資訊組合 ──
-    sock_type_en_map = {
-        "長襪 — 小腿肚以上": "knee-high socks (above calf)",
-        "中筒襪 — 腳踝以上，小腿肚以下": "crew socks / mid-calf socks (above ankle, below calf)",
-        "短襪 — 剛好蓋過腳踝": "ankle socks (just covering the ankle)",
-        "隱形襪 — 露出腳踝": "no-show socks / invisible socks (ankle exposed)",
-    }
-    sock_info_en = sock_type_en_map.get(sock_type, "socks")
-    sock_length_desc = f", sock tube length approximately {sock_length}" if sock_length else ""
-    sock_length_zh = f"，襪筒長度約 {sock_length}" if sock_length else ""
-    scene_desc = random.choice(scene_options[selected_scene])
-    sock_type_zh = sock_type.split(" — ")[0]
+        # ── 襪子資訊組合 ──
+        sock_type_en_map = {
+            "長襪 — 小腿肚以上": "knee-high socks (above calf)",
+            "中筒襪 — 腳踝以上，小腿肚以下": "crew socks / mid-calf socks (above ankle, below calf)",
+            "短襪 — 剛好蓋過腳踝": "ankle socks (just covering the ankle)",
+            "隱形襪 — 露出腳踝": "no-show socks / invisible socks (ankle exposed)",
+        }
+        sock_info_en = sock_type_en_map.get(sock_type, "socks")
+        sock_length_desc = f", sock tube length approximately {sock_length}" if sock_length else ""
+        sock_length_zh = f"，襪筒長度約 {sock_length}" if sock_length else ""
+        scene_desc = random.choice(scene_options[selected_scene])
+        sock_type_zh = sock_type.split(" — ")[0]
 
-    # 儲存批次處理所需的分析參數（供 Step 4 後的批次處理區塊使用）
-    st.session_state["_batch_params"] = {
-        "sock_info_en": sock_info_en,
-        "sock_length_desc": sock_length_desc,
-        "sock_type_zh": sock_type_zh,
-        "sock_length_zh": sock_length_zh,
-        "sock_length": sock_length,
-        "selected_scene": selected_scene,
-        "selected_outfit": selected_outfit,
-        "outfit_desc_en": outfit_desc_en,
-    }
+        # 儲存批次處理所需的分析參數（供 Step 4 後的批次處理區塊使用）
+        st.session_state["_batch_params"] = {
+            "sock_info_en": sock_info_en,
+            "sock_length_desc": sock_length_desc,
+            "sock_type_zh": sock_type_zh,
+            "sock_length_zh": sock_length_zh,
+            "sock_length": sock_length,
+            "selected_scene": selected_scene,
+            "selected_outfit": selected_outfit,
+            "outfit_desc_en": outfit_desc_en,
+        }
 
-    if st.button("🔍 分析圖片並自動產出提示詞", type="primary", use_container_width=False):
-        img_bytes = uploaded_file.getvalue()
-        img_base64 = base64.standard_b64encode(img_bytes).decode("utf-8")
-        mime_type = st.session_state.upload_mime or "image/jpeg"
+        if st.button("🔍 分析圖片並自動產出提示詞", type="primary", use_container_width=False):
+            img_bytes = uploaded_file.getvalue()
+            img_base64 = base64.standard_b64encode(img_bytes).decode("utf-8")
+            mime_type = st.session_state.upload_mime or "image/jpeg"
 
-        _notes_block = ""
-        if product_notes:
-            _notes_block = f"\nSPECIAL NOTES FROM USER (you MUST incorporate these into your prompts):\n{product_notes}\n"
+            _notes_block = ""
+            if product_notes:
+                _notes_block = f"\nSPECIAL NOTES FROM USER (you MUST incorporate these into your prompts):\n{product_notes}\n"
 
-        analysis_prompt = f"""You are a professional e-commerce fashion photographer and AI image prompt engineer specializing in Korean style.
+            analysis_prompt = f"""You are a professional e-commerce fashion photographer and AI image prompt engineer specializing in Korean style.
 
-Analyze this product flat lay image carefully and generate AI image generation prompts for a Korean female model wearing this product.
+    Analyze this product flat lay image carefully and generate AI image generation prompts for a Korean female model wearing this product.
 
-PRODUCT INFO (MUST appear in the generated prompts):
-- Sock type: {sock_info_en}{sock_length_desc}
-- Scene / Background: {scene_desc}
-- Outfit style: {outfit_desc_en}
-{_notes_block}
-IMPORTANT RULES:
-- The generated positive_en prompt MUST explicitly contain these exact details:
-  1. The sock type: "{sock_info_en}"
-  2. The sock length: "{sock_length if sock_length else 'not specified'}" (include exact measurement if provided)
-  3. The scene description keywords from: "{scene_desc}"
-  4. The outfit description: "{outfit_desc_en}"
-- If user provided special notes above, incorporate them naturally into the positive_en prompt and reflect any constraints in negative_en
-- Do NOT describe the specific pattern, color, or design details of the product itself (the reference image will be provided separately to the image generation model)
-- Focus on the MODEL SCENE: pose, angle, background, lighting, styling
-- The sock type is "{sock_info_en}" — make sure the pose and camera angle clearly showcase socks at the correct height on the leg
-- Shot must be LOWER BODY only (waist down, include waist)
-- Korean female model aesthetic, slim legs
-- E-commerce commercial quality
-- Slight side angle to showcase the product
-- The negative prompt should prevent common AI image generation errors
+    PRODUCT INFO (MUST appear in the generated prompts):
+    - Sock type: {sock_info_en}{sock_length_desc}
+    - Scene / Background: {scene_desc}
+    - Outfit style: {outfit_desc_en}
+    {_notes_block}
+    IMPORTANT RULES:
+    - The generated positive_en prompt MUST explicitly contain these exact details:
+      1. The sock type: "{sock_info_en}"
+      2. The sock length: "{sock_length if sock_length else 'not specified'}" (include exact measurement if provided)
+      3. The scene description keywords from: "{scene_desc}"
+      4. The outfit description: "{outfit_desc_en}"
+    - If user provided special notes above, incorporate them naturally into the positive_en prompt and reflect any constraints in negative_en
+    - Do NOT describe the specific pattern, color, or design details of the product itself (the reference image will be provided separately to the image generation model)
+    - Focus on the MODEL SCENE: pose, angle, background, lighting, styling
+    - The sock type is "{sock_info_en}" — make sure the pose and camera angle clearly showcase socks at the correct height on the leg
+    - Shot must be LOWER BODY only (waist down, include waist)
+    - Korean female model aesthetic, slim legs
+    - E-commerce commercial quality
+    - Slight side angle to showcase the product
+    - The negative prompt should prevent common AI image generation errors
 
-Return ONLY a valid JSON object (no markdown, no extra text) with this exact structure:
-{{
-  "positive_en": "Korean female model, slim legs, wearing {sock_info_en}{sock_length_desc}, {outfit_desc_en}, [pose details], lower body shot from waist down, {scene_desc}, [lighting], [photography quality]",
-  "positive_zh": "韓系女性模特兒，穿著{sock_type_zh}{sock_length_zh}，{selected_outfit}，[姿勢細節]，腰部以下畫面，[場景]，[光線]，[攝影質感]",
-  "negative_en": "full body, face visible, upper body dominant, extra limbs, distorted feet, deformed toes, blurry, low quality, pixelated, watermark, text overlay, logo, jpeg artifacts, overexposed, dark shadows, plastic skin, unrealistic proportions, missing product, duplicate body parts, bad anatomy, extra fingers, nsfw, wrong sock length, barefoot"
-}}"""
+    Return ONLY a valid JSON object (no markdown, no extra text) with this exact structure:
+    {{
+      "positive_en": "Korean female model, slim legs, wearing {sock_info_en}{sock_length_desc}, {outfit_desc_en}, [pose details], lower body shot from waist down, {scene_desc}, [lighting], [photography quality]",
+      "positive_zh": "韓系女性模特兒，穿著{sock_type_zh}{sock_length_zh}，{selected_outfit}，[姿勢細節]，腰部以下畫面，[場景]，[光線]，[攝影質感]",
+      "negative_en": "full body, face visible, upper body dominant, extra limbs, distorted feet, deformed toes, blurry, low quality, pixelated, watermark, text overlay, logo, jpeg artifacts, overexposed, dark shadows, plastic skin, unrealistic proportions, missing product, duplicate body parts, bad anatomy, extra fingers, nsfw, wrong sock length, barefoot"
+    }}"""
 
-        # ── 嘗試 Claude，失敗則 fallback 到 Gemini ──
-        analysis_text = None
-        used_engine = None
-        cost_info = None
+            # ── 嘗試 Claude，失敗則 fallback 到 Gemini ──
+            analysis_text = None
+            used_engine = None
+            cost_info = None
 
-        # 1) 先嘗試 Claude
-        if anthropic_key:
-            with st.spinner("Claude 正在分析商品圖片…"):
-                try:
-                    claude_client = anthropic.Anthropic(api_key=anthropic_key)
-                    response = retry_api_call(
-                        claude_client.messages.create,
-                        model="claude-sonnet-4-6",
-                        max_tokens=1024,
-                        messages=[{
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "image",
-                                    "source": {
-                                        "type": "base64",
-                                        "media_type": mime_type,
-                                        "data": img_base64,
+            # 1) 先嘗試 Claude
+            if anthropic_key:
+                with st.spinner("Claude 正在分析商品圖片…"):
+                    try:
+                        claude_client = anthropic.Anthropic(api_key=anthropic_key)
+                        response = retry_api_call(
+                            claude_client.messages.create,
+                            model="claude-sonnet-4-6",
+                            max_tokens=1024,
+                            messages=[{
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "image",
+                                        "source": {
+                                            "type": "base64",
+                                            "media_type": mime_type,
+                                            "data": img_base64,
+                                        },
                                     },
-                                },
-                                {"type": "text", "text": analysis_prompt},
+                                    {"type": "text", "text": analysis_prompt},
+                                ],
+                            }],
+                        )
+                        analysis_text = response.content[0].text.strip()
+                        used_engine = "claude"
+                        _inp2 = response.usage.input_tokens
+                        _out2 = response.usage.output_tokens
+                        _c2 = _cost_claude(_inp2, _out2)
+                        cost_info = f"💰 本步驟花費：${_c2:.4f}（Input: {_inp2:,} tokens / Output: {_out2:,} tokens）"
+                        st.session_state.cost_step2 = _c2
+                    except Exception as e:
+                        st.warning(f"⚠️ Claude API 失敗（{e}），嘗試使用 Gemini 分析…")
+
+            # 2) Claude 失敗或無 key → fallback 到 Gemini
+            if analysis_text is None and api_key:
+                with st.spinner("Gemini 正在分析商品圖片…"):
+                    try:
+                        gemini_client = genai.Client(api_key=api_key)
+                        gemini_response = retry_api_call(
+                            gemini_client.models.generate_content,
+                            model="gemini-2.5-flash",
+                            contents=[
+                                types.Part.from_bytes(data=img_bytes, mime_type=mime_type),
+                                analysis_prompt,
                             ],
-                        }],
-                    )
-                    analysis_text = response.content[0].text.strip()
-                    used_engine = "claude"
-                    _inp2 = response.usage.input_tokens
-                    _out2 = response.usage.output_tokens
-                    _c2 = _cost_claude(_inp2, _out2)
-                    cost_info = f"💰 本步驟花費：${_c2:.4f}（Input: {_inp2:,} tokens / Output: {_out2:,} tokens）"
-                    st.session_state.cost_step2 = _c2
-                except Exception as e:
-                    st.warning(f"⚠️ Claude API 失敗（{e}），嘗試使用 Gemini 分析…")
+                        )
+                        analysis_text = gemini_response.text.strip()
+                        used_engine = "gemini"
+                    except Exception as e2:
+                        st.error(f"❌ Gemini 分析也失敗：{e2}")
 
-        # 2) Claude 失敗或無 key → fallback 到 Gemini
-        if analysis_text is None and api_key:
-            with st.spinner("Gemini 正在分析商品圖片…"):
+            # 3) 無任何可用 API
+            if analysis_text is None and not api_key and not anthropic_key:
+                st.error("❌ 請先設定 Anthropic 或 Gemini API Key")
+
+            # ── 解析結果 ──
+            if analysis_text:
                 try:
-                    gemini_client = genai.Client(api_key=api_key)
-                    gemini_response = retry_api_call(
-                        gemini_client.models.generate_content,
-                        model="gemini-2.5-flash",
-                        contents=[
-                            types.Part.from_bytes(data=img_bytes, mime_type=mime_type),
-                            analysis_prompt,
-                        ],
-                    )
-                    analysis_text = gemini_response.text.strip()
-                    used_engine = "gemini"
-                except Exception as e2:
-                    st.error(f"❌ Gemini 分析也失敗：{e2}")
+                    text = analysis_text
+                    if "```json" in text:
+                        text = text.split("```json")[1].split("```")[0].strip()
+                    elif "```" in text:
+                        text = text.split("```")[1].split("```")[0].strip()
 
-        # 3) 無任何可用 API
-        if analysis_text is None and not api_key and not anthropic_key:
-            st.error("❌ 請先設定 Anthropic 或 Gemini API Key")
+                    st.session_state.prompts = json.loads(text)
+                    engine_label = "Claude" if used_engine == "claude" else "Gemini"
+                    st.success(f"✅ 提示詞已自動生成（使用 {engine_label}）！可在下方編輯後再生成圖片。")
+                    if cost_info:
+                        st.info(cost_info)
+                except json.JSONDecodeError:
+                    st.session_state.prompts = {
+                        "positive_en": analysis_text,
+                        "positive_zh": "",
+                        "negative_en": "full body, face visible, extra limbs, distorted feet, deformed toes, blurry, low quality, pixelated, watermark, text overlay, logo, jpeg artifacts, overexposed, dark shadows, plastic skin, unrealistic proportions, duplicate body parts, bad anatomy, extra fingers",
+                    }
+                    st.warning("⚠️ JSON 解析失敗，原始回覆已填入正向提示詞欄位，請手動調整。")
 
-        # ── 解析結果 ──
-        if analysis_text:
-            try:
-                text = analysis_text
-                if "```json" in text:
-                    text = text.split("```json")[1].split("```")[0].strip()
-                elif "```" in text:
-                    text = text.split("```")[1].split("```")[0].strip()
-
-                st.session_state.prompts = json.loads(text)
-                engine_label = "Claude" if used_engine == "claude" else "Gemini"
-                st.success(f"✅ 提示詞已自動生成（使用 {engine_label}）！可在下方編輯後再生成圖片。")
-                if cost_info:
-                    st.info(cost_info)
-            except json.JSONDecodeError:
-                st.session_state.prompts = {
-                    "positive_en": analysis_text,
-                    "positive_zh": "",
-                    "negative_en": "full body, face visible, extra limbs, distorted feet, deformed toes, blurry, low quality, pixelated, watermark, text overlay, logo, jpeg artifacts, overexposed, dark shadows, plastic skin, unrealistic proportions, duplicate body parts, bad anatomy, extra fingers",
-                }
-                st.warning("⚠️ JSON 解析失敗，原始回覆已填入正向提示詞欄位，請手動調整。")
-
-# 顯示並允許編輯提示詞
-if st.session_state.prompts:
-    st.markdown("#### ✏️ 提示詞預覽（可直接編輯）")
-    col_p1, col_p2 = st.columns(2)
-    with col_p1:
-        pos_en = st.text_area(
-            "正向提示詞（English）",
-            value=st.session_state.prompts.get("positive_en", ""),
-            height=130,
-            key="pos_en_input",
+    # 顯示並允許編輯提示詞
+    if st.session_state.prompts:
+        st.markdown("#### ✏️ 提示詞預覽（可直接編輯）")
+        col_p1, col_p2 = st.columns(2)
+        with col_p1:
+            pos_en = st.text_area(
+                "正向提示詞（English）",
+                value=st.session_state.prompts.get("positive_en", ""),
+                height=130,
+                key="pos_en_input",
+            )
+        with col_p2:
+            pos_zh = st.text_area(
+                "正向提示詞（中文版）",
+                value=st.session_state.prompts.get("positive_zh", ""),
+                height=130,
+                key="pos_zh_input",
+            )
+        neg_en = st.text_area(
+            "反向提示詞（Negative Prompts）",
+            value=st.session_state.prompts.get("negative_en", ""),
+            height=90,
+            key="neg_en_input",
         )
-    with col_p2:
-        pos_zh = st.text_area(
-            "正向提示詞（中文版）",
-            value=st.session_state.prompts.get("positive_zh", ""),
-            height=130,
-            key="pos_zh_input",
-        )
-    neg_en = st.text_area(
-        "反向提示詞（Negative Prompts）",
-        value=st.session_state.prompts.get("negative_en", ""),
-        height=90,
-        key="neg_en_input",
-    )
-    st.session_state.prompts["positive_en"] = pos_en
-    st.session_state.prompts["positive_zh"] = pos_zh
-    st.session_state.prompts["negative_en"] = neg_en
+        st.session_state.prompts["positive_en"] = pos_en
+        st.session_state.prompts["positive_zh"] = pos_zh
+        st.session_state.prompts["negative_en"] = neg_en
 
-st.divider()
+    st.divider()
 
 # ─────────────────────────────────────────
 # 單張圖片生成函式（供批次生成 & 個別重新生成共用）
@@ -960,432 +991,477 @@ def generate_single_photo(api_key_val, shot_config, base_prompt, neg_prompt, sce
 
 # ─────────────────────────────────────────
 # STEP 3：生成模特兒實穿照（5 張照片組）
-# ─────────────────────────────────────────
-st.markdown('<div class="step-header">Step 3 · 🎨 生成模特兒實穿照組（8 張）</div>', unsafe_allow_html=True)
+if show_step3:
+    # ─────────────────────────────────────────
+    st.markdown('<div class="step-header">Step 3 · 🎨 生成模特兒實穿照組（8 張）</div>', unsafe_allow_html=True)
 
-# ── 動作類型池（依拍攝範圍分類） ──
-# 全身照動作池（A / C / D）
-FULLBODY_POSES = [
-    {
-        "id": "A", "name": "高處坐姿",
-        "shot_desc": (
-            "FULL BODY photo from head to shoes. "
-            "Model sitting on an elevated surface (bench, ledge, slide, or railing), legs dangling or stretched outward. "
-            "Relaxed playful posture, one hand resting on the surface, the other touching hair or holding a prop. "
-            "FACE FULLY VISIBLE: natural light makeup, gentle smile, looking at camera. "
-            "Korean young woman, long hair. Socks and shoes clearly visible on dangling feet. "
-            "Complete outfit visible: clothing, socks, and shoes all in frame."
-        ),
-    },
-    {
-        "id": "C", "name": "站姿俏皮",
-        "shot_desc": (
-            "FULL BODY photo from head to shoes. "
-            "Model standing with a playful pose: one foot slightly lifted or on tiptoe, body tilted, "
-            "one hand touching hat/hair or raised cheerfully. Dynamic and youthful energy. "
-            "FACE FULLY VISIBLE: bright smile, looking at camera, natural light makeup. "
-            "Korean young woman, long hair. Complete outfit visible: clothing, socks, and shoes."
-        ),
-    },
-    {
-        "id": "D", "name": "躺靠伸腳",
-        "shot_desc": (
-            "FULL BODY photo from head to shoes. "
-            "Model leaning back casually on a railing, bench, or chair, legs stretched forward and slightly raised. "
-            "One hand holding a drink or prop, relaxed happy expression. Socks are prominently displayed on the raised feet. "
-            "FACE FULLY VISIBLE: natural smile, looking at camera or upward. "
-            "Korean young woman, long hair. Complete outfit visible: clothing, socks, and shoes."
-        ),
-    },
-    {
-        "id": "I", "name": "活力前傾站姿",
-        "shot_desc": (
-            "FULL BODY photo from head to shoes. "
-            "Model standing with a slight forward lean, one hand casually gripping a metal railing or fence, body tilted playfully forward, legs slightly apart showing socks clearly, energetic and dynamic full-body shot, natural outdoor playground or park setting. "
-            "FACE FULLY VISIBLE: bright smile, looking at camera, natural light makeup. "
-            "Korean young woman, long hair. Complete outfit visible: clothing, socks, and shoes."
-        ),
-    },
-]
-
-# 下半身動作池（B / F / H）
-LOWERBODY_POSES = [
-    {
-        "id": "B", "name": "地面坐姿",
-        "shot_desc": (
-            "LOWER BODY ONLY from waist down. NO face, NO chest visible. "
-            "Model sitting on the ground with legs extended forward or one leg bent. "
-            "Camera at low angle, shooting toward the feet. Both socks clearly visible. "
-            "Hands may rest on knees (only hands visible, no arms above elbow). "
-            "Correct anatomy: 5 toes per foot, natural proportions."
-        ),
-    },
-    {
-        "id": "F", "name": "道具互動",
-        "shot_desc": (
-            "LOWER BODY ONLY from waist down. NO face, NO chest visible. "
-            "Model's legs and feet with a lifestyle prop nearby: a basketball, coffee cup, tote bag, or book on the ground. "
-            "Casual seated or standing pose, socks are the hero of the composition. "
-            "Prop adds context and visual interest without stealing focus from socks. "
-            "Correct anatomy: 5 toes per foot, natural proportions."
-        ),
-    },
-    {
-        "id": "H", "name": "蹲姿抱膝",
-        "shot_desc": (
-            "LOWER BODY ONLY from waist down. NO face, NO chest visible. "
-            "Model squatting or crouching on a low wall, stone, or curb, arms wrapped around knees (only hands visible). "
-            "Camera at ground level, shooting straight at the feet and socks. "
-            "Socks prominent and centered in composition. "
-            "Correct anatomy: 5 toes per foot, natural proportions."
-        ),
-    },
-    {
-        "id": "J", "name": "🦶 坐地放鬆",
-        "shot_desc": (
-            "LOWER BODY ONLY from waist down. NO face, NO chest visible. "
-            "Model sitting on the ground with knees slightly bent upward, both feet flat on the ground and slightly apart with toes pointing slightly outward, lower body close-up shot from a low angle, socks clearly visible on both feet showing front pattern details, legs naturally relaxed, casual and effortless pose. "
-            "Correct anatomy: 5 toes per foot, natural proportions."
-        ),
-    },
-    {
-        "id": "K", "name": "側躺伸腿",
-        "shot_desc": (
-            "LOWER BODY ONLY from waist down. NO face, NO chest visible. "
-            "Model half-reclining on the ground leaning on one arm, legs extended and slightly crossed, lower body close-up shot, side view of socks clearly showing pattern details, relaxed laid-back pose, outdoor ground-level perspective. "
-            "Correct anatomy: 5 toes per foot, natural proportions."
-        ),
-    },
-    {
-        "id": "L", "name": "💺 高台垂腳",
-        "shot_desc": (
-            "LOWER BODY ONLY from waist down. NO face, NO chest visible. "
-            "Model sitting on an elevated concrete ledge or bench, one foot planted on the ground while the other foot hangs naturally off the edge, legs staggered front and back (not crossed or overlapping), hands clasped together resting above the front knee, lower body close-up shot, sock pattern on the front-facing leg prominently displayed, clean minimalist background with natural sunlight and shadows. "
-            "Correct anatomy: 5 toes per foot, natural proportions."
-        ),
-    },
-    {
-        "id": "M", "name": "🪜 階梯踩踏",
-        "shot_desc": (
-            "Model standing on stone or concrete steps with one foot on a higher step and the other foot on a lower step, side angle shot focusing on lower body, legs in a natural climbing pose showing sock details clearly on both feet, outdoor park or street stairway setting with railing. "
-            "Correct anatomy: 5 toes per foot, natural proportions."
-        ),
-    },
-]
-
-# 腳部特寫動作池（E / G）
-FEET_POSES = [
-    {
-        "id": "E", "name": "階梯踩踏",
-        "shot_desc": (
-            "CLOSE-UP of feet and ankles ONLY, from mid-calf down. NO knee, NO thigh. "
-            "Model's feet stepping on stairs or a raised surface, shot from low angle looking upward. "
-            "One foot on a higher step, one on a lower step, showing sock height and detail. "
-            "Sharp focus on sock fabric texture with blurred stairway background. "
-            "Correct foot anatomy: 5 toes, natural bone structure, no deformation."
-        ),
-    },
-    {
-        "id": "G", "name": "屈膝坐姿側面",
-        "shot_desc": (
-            "Model sitting down on the flat ground with buttocks touching the ground, both knees bent and pulled up toward chest, arms gently hugging or resting on the knees, shot from a slight side angle at ground level, the model is NOT standing, she is fully seated on the ground in a relaxed crouching sit position, socks visible on both feet which are flat on the ground, casual and youthful vibe. "
-            "Sock side profile prominently displayed — pattern, color bands, and texture clearly visible. "
-            "Outdoor setting, natural lighting. Correct anatomy throughout."
-        ),
-    },
-]
-
-def build_shot_configs():
-    """每次生成時隨機組合 8 張照片的動作：3 全身 + 4 下半身 + 1 屈膝坐姿"""
-    full = random.sample(FULLBODY_POSES, 3)
-    lower = random.sample(LOWERBODY_POSES, 4)
-    feet = random.sample(FEET_POSES, 1)
-
-    return [
-        {"label": f"📷 全身照 ①（{full[0]['name']}）", "shot_desc": full[0]["shot_desc"]},
-        {"label": f"📷 全身照 ②（{full[1]['name']}）", "shot_desc": full[1]["shot_desc"]},
-        {"label": f"📷 全身照 ③（{full[2]['name']}）", "shot_desc": full[2]["shot_desc"]},
-        {"label": f"🦵 下半身特寫 ①（{lower[0]['name']}）", "shot_desc": lower[0]["shot_desc"]},
-        {"label": f"🦵 下半身特寫 ②（{lower[1]['name']}）", "shot_desc": lower[1]["shot_desc"]},
-        {"label": f"🦵 下半身特寫 ③（{lower[2]['name']}）", "shot_desc": lower[2]["shot_desc"]},
-        {"label": f"🦵 下半身特寫 ④（{lower[3]['name']}）", "shot_desc": lower[3]["shot_desc"]},
-        {"label": f"🧎 屈膝坐姿（{feet[0]['name']}）", "shot_desc": feet[0]["shot_desc"]},
+    # ── 動作類型池（依拍攝範圍分類） ──
+    # 全身照動作池（A / C / D）
+    FULLBODY_POSES = [
+        {
+            "id": "A", "name": "高處坐姿",
+            "shot_desc": (
+                "FULL BODY photo from head to shoes. "
+                "Model sitting on an elevated surface (bench, ledge, slide, or railing), legs dangling or stretched outward. "
+                "Relaxed playful posture, one hand resting on the surface, the other touching hair or holding a prop. "
+                "FACE FULLY VISIBLE: natural light makeup, gentle smile, looking at camera. "
+                "Korean young woman, long hair. Socks and shoes clearly visible on dangling feet. "
+                "Complete outfit visible: clothing, socks, and shoes all in frame."
+            ),
+        },
+        {
+            "id": "C", "name": "站姿俏皮",
+            "shot_desc": (
+                "FULL BODY photo from head to shoes. "
+                "Model standing with a playful pose: one foot slightly lifted or on tiptoe, body tilted, "
+                "one hand touching hat/hair or raised cheerfully. Dynamic and youthful energy. "
+                "FACE FULLY VISIBLE: bright smile, looking at camera, natural light makeup. "
+                "Korean young woman, long hair. Complete outfit visible: clothing, socks, and shoes."
+            ),
+        },
+        {
+            "id": "D", "name": "躺靠伸腳",
+            "shot_desc": (
+                "FULL BODY photo from head to shoes. "
+                "Model leaning back casually on a railing, bench, or chair, legs stretched forward and slightly raised. "
+                "One hand holding a drink or prop, relaxed happy expression. Socks are prominently displayed on the raised feet. "
+                "FACE FULLY VISIBLE: natural smile, looking at camera or upward. "
+                "Korean young woman, long hair. Complete outfit visible: clothing, socks, and shoes."
+            ),
+        },
+        {
+            "id": "I", "name": "活力前傾站姿",
+            "shot_desc": (
+                "FULL BODY photo from head to shoes. "
+                "Model standing with a slight forward lean, one hand casually gripping a metal railing or fence, body tilted playfully forward, legs slightly apart showing socks clearly, energetic and dynamic full-body shot, natural outdoor playground or park setting. "
+                "FACE FULLY VISIBLE: bright smile, looking at camera, natural light makeup. "
+                "Korean young woman, long hair. Complete outfit visible: clothing, socks, and shoes."
+            ),
+        },
     ]
 
-# 初始化或使用已生成的 SHOT_CONFIGS（避免 rerun 時重新隨機）
-if "current_shot_configs" not in st.session_state:
-    st.session_state.current_shot_configs = build_shot_configs()
-SHOT_CONFIGS = st.session_state.current_shot_configs
+    # 下半身動作池（B / F / H）
+    LOWERBODY_POSES = [
+        {
+            "id": "B", "name": "地面坐姿",
+            "shot_desc": (
+                "LOWER BODY ONLY from waist down. NO face, NO chest visible. "
+                "Model sitting on the ground with legs extended forward or one leg bent. "
+                "Camera at low angle, shooting toward the feet. Both socks clearly visible. "
+                "Hands may rest on knees (only hands visible, no arms above elbow). "
+                "Correct anatomy: 5 toes per foot, natural proportions."
+            ),
+        },
+        {
+            "id": "F", "name": "道具互動",
+            "shot_desc": (
+                "LOWER BODY ONLY from waist down. NO face, NO chest visible. "
+                "Model's legs and feet with a lifestyle prop nearby: a basketball, coffee cup, tote bag, or book on the ground. "
+                "Casual seated or standing pose, socks are the hero of the composition. "
+                "Prop adds context and visual interest without stealing focus from socks. "
+                "Correct anatomy: 5 toes per foot, natural proportions."
+            ),
+        },
+        {
+            "id": "H", "name": "蹲姿抱膝",
+            "shot_desc": (
+                "LOWER BODY ONLY from waist down. NO face, NO chest visible. "
+                "Model squatting or crouching on a low wall, stone, or curb, arms wrapped around knees (only hands visible). "
+                "Camera at ground level, shooting straight at the feet and socks. "
+                "Socks prominent and centered in composition. "
+                "Correct anatomy: 5 toes per foot, natural proportions."
+            ),
+        },
+        {
+            "id": "J", "name": "🦶 坐地放鬆",
+            "shot_desc": (
+                "LOWER BODY ONLY from waist down. NO face, NO chest visible. "
+                "Model sitting on the ground with knees slightly bent upward, both feet flat on the ground and slightly apart with toes pointing slightly outward, lower body close-up shot from a low angle, socks clearly visible on both feet showing front pattern details, legs naturally relaxed, casual and effortless pose. "
+                "Correct anatomy: 5 toes per foot, natural proportions."
+            ),
+        },
+        {
+            "id": "K", "name": "側躺伸腿",
+            "shot_desc": (
+                "LOWER BODY ONLY from waist down. NO face, NO chest visible. "
+                "Model half-reclining on the ground leaning on one arm, legs extended and slightly crossed, lower body close-up shot, side view of socks clearly showing pattern details, relaxed laid-back pose, outdoor ground-level perspective. "
+                "Correct anatomy: 5 toes per foot, natural proportions."
+            ),
+        },
+        {
+            "id": "L", "name": "💺 高台垂腳",
+            "shot_desc": (
+                "LOWER BODY ONLY from waist down. NO face, NO chest visible. "
+                "Model sitting on an elevated concrete ledge or bench, one foot planted on the ground while the other foot hangs naturally off the edge, legs staggered front and back (not crossed or overlapping), hands clasped together resting above the front knee, lower body close-up shot, sock pattern on the front-facing leg prominently displayed, clean minimalist background with natural sunlight and shadows. "
+                "Correct anatomy: 5 toes per foot, natural proportions."
+            ),
+        },
+        {
+            "id": "M", "name": "🪜 階梯踩踏",
+            "shot_desc": (
+                "Model standing on stone or concrete steps with one foot on a higher step and the other foot on a lower step, side angle shot focusing on lower body, legs in a natural climbing pose showing sock details clearly on both feet, outdoor park or street stairway setting with railing. "
+                "Correct anatomy: 5 toes per foot, natural proportions."
+            ),
+        },
+    ]
 
-if not st.session_state.prompts:
-    st.info("請先完成 Step 2 產出提示詞")
-elif not api_key:
-    st.warning("請先在左側 Sidebar 輸入 Gemini API Key")
-else:
-    # 顯示 Step 2 選擇的場景（唯讀提示）
-    if st.session_state.selected_scene:
-        st.info(f"🏠 使用場景：**{st.session_state.selected_scene}**（可在 Step 2 更換）")
+    # 腳部特寫動作池（E / G）
+    FEET_POSES = [
+        {
+            "id": "E", "name": "階梯踩踏",
+            "shot_desc": (
+                "CLOSE-UP of feet and ankles ONLY, from mid-calf down. NO knee, NO thigh. "
+                "Model's feet stepping on stairs or a raised surface, shot from low angle looking upward. "
+                "One foot on a higher step, one on a lower step, showing sock height and detail. "
+                "Sharp focus on sock fabric texture with blurred stairway background. "
+                "Correct foot anatomy: 5 toes, natural bone structure, no deformation."
+            ),
+        },
+        {
+            "id": "G", "name": "屈膝坐姿側面",
+            "shot_desc": (
+                "Model sitting down on the flat ground with buttocks touching the ground, both knees bent and pulled up toward chest, arms gently hugging or resting on the knees, shot from a slight side angle at ground level, the model is NOT standing, she is fully seated on the ground in a relaxed crouching sit position, socks visible on both feet which are flat on the ground, casual and youthful vibe. "
+                "Sock side profile prominently displayed — pattern, color bands, and texture clearly visible. "
+                "Outdoor setting, natural lighting. Correct anatomy throughout."
+            ),
+        },
+    ]
 
-    # 顯示 Step 2 選擇的穿搭風格（唯讀提示）
-    if st.session_state.get("selected_outfit"):
-        st.info(f"👗 穿搭風格：**{st.session_state.selected_outfit}**（可在 Step 2 更換）")
+    def build_shot_configs():
+        """每次生成時隨機組合 8 張照片的動作：3 全身 + 4 下半身 + 1 屈膝坐姿"""
+        full = random.sample(FULLBODY_POSES, 3)
+        lower = random.sample(LOWERBODY_POSES, 4)
+        feet = random.sample(FEET_POSES, 1)
 
-    st.markdown("**Step 3a**: 先生成第 1 張基準照 → **Step 3b**: 確認後再生成其餘 7 張")
+        return [
+            {"label": f"📷 全身照 ①（{full[0]['name']}）", "shot_desc": full[0]["shot_desc"]},
+            {"label": f"📷 全身照 ②（{full[1]['name']}）", "shot_desc": full[1]["shot_desc"]},
+            {"label": f"📷 全身照 ③（{full[2]['name']}）", "shot_desc": full[2]["shot_desc"]},
+            {"label": f"🦵 下半身特寫 ①（{lower[0]['name']}）", "shot_desc": lower[0]["shot_desc"]},
+            {"label": f"🦵 下半身特寫 ②（{lower[1]['name']}）", "shot_desc": lower[1]["shot_desc"]},
+            {"label": f"🦵 下半身特寫 ③（{lower[2]['name']}）", "shot_desc": lower[2]["shot_desc"]},
+            {"label": f"🦵 下半身特寫 ④（{lower[3]['name']}）", "shot_desc": lower[3]["shot_desc"]},
+            {"label": f"🧎 屈膝坐姿（{feet[0]['name']}）", "shot_desc": feet[0]["shot_desc"]},
+        ]
 
-    if st.button("🎨 生成第 1 張基準實穿照", type="primary", use_container_width=False):
-        # 每次生成重新隨機組合動作
+    # 初始化或使用已生成的 SHOT_CONFIGS（避免 rerun 時重新隨機）
+    if "current_shot_configs" not in st.session_state:
         st.session_state.current_shot_configs = build_shot_configs()
-        SHOT_CONFIGS = st.session_state.current_shot_configs
+    SHOT_CONFIGS = st.session_state.current_shot_configs
 
-        client = genai.Client(api_key=api_key)
+    if not st.session_state.prompts:
+        st.info("請先完成 Step 2 產出提示詞")
+    elif not api_key:
+        st.warning("請先在左側 Sidebar 輸入 Gemini API Key")
+    else:
+        # 顯示 Step 2 選擇的場景（唯讀提示）
+        if st.session_state.selected_scene:
+            st.info(f"🏠 使用場景：**{st.session_state.selected_scene}**（可在 Step 2 更換）")
 
-        # 從 Step 2 取場景描述（每場景隨機選 1 組腳本）
+        # 顯示 Step 2 選擇的穿搭風格（唯讀提示）
+        if st.session_state.get("selected_outfit"):
+            st.info(f"👗 穿搭風格：**{st.session_state.selected_outfit}**（可在 Step 2 更換）")
+
+        st.markdown("**Step 3a**: 先生成第 1 張基準照 → **Step 3b**: 確認後再生成其餘 7 張")
+
+        if st.button("🎨 生成第 1 張基準實穿照", type="primary", use_container_width=False):
+            # 每次生成重新隨機組合動作
+            st.session_state.current_shot_configs = build_shot_configs()
+            SHOT_CONFIGS = st.session_state.current_shot_configs
+
+            client = genai.Client(api_key=api_key)
+
+            # 從 Step 2 取場景描述（每場景隨機選 1 組腳本）
+            scene_variants = SCENE_CONFIG.get(
+                st.session_state.selected_scene or "清爽白背景（電商主圖）",
+                ["pure white studio background, soft diffused studio lighting"]
+            )
+            scene_desc = random.choice(scene_variants)
+
+            base_prompt = st.session_state.prompts["positive_en"] + f", {st.session_state.get('outfit_desc_en', '')}"
+            neg_prompt = st.session_state.prompts["negative_en"]
+
+            # 準備上傳的原始商品圖片
+            ref_part = None
+            if uploaded_file:
+                img_bytes = uploaded_file.getvalue()
+                mime_type = st.session_state.upload_mime or "image/jpeg"
+                ref_part = types.Part.from_bytes(data=img_bytes, mime_type=mime_type)
+
+            # ── Step 3a: 只生成第 1 張基準照 ──
+            hero_shot = SHOT_CONFIGS[0]
+            with st.spinner(f"正在生成基準照 {hero_shot['label']}…約需 30～60 秒"):
+                result = generate_single_photo(api_key, hero_shot, base_prompt, neg_prompt, scene_desc, ref_part)
+
+            if result.get("bytes"):
+                st.session_state.hero_image = result
+                st.session_state.hero_generated = True
+                st.session_state.remaining_generated = False
+                # 初始化 model_images（先放第一張）
+                st.session_state.model_images = [result]
+                st.session_state.model_image_bytes = result["bytes"]
+                # 儲存生成參數供 Step 3b 使用
+                st.session_state["_gen_params"] = {
+                    "base_prompt": base_prompt,
+                    "neg_prompt": neg_prompt,
+                    "scene_desc": scene_desc,
+                }
+                st.success("✅ 基準照生成完成！確認滿意後，按下方按鈕生成其餘 7 張。")
+                _c3a = _cost_gemini_images(1)
+                st.session_state.cost_step3_total = st.session_state.get("cost_step3_total", 0.0) + _c3a
+                st.info(f"💰 本步驟花費：${_c3a:.4f}（Gemini 圖片生成 1 張，預估值）")
+            else:
+                st.error(f"❌ 基準照生成失敗：{result.get('error', '未知錯誤')}")
+
+        # ── 顯示基準照 & Step 3b 按鈕 ──
+        if st.session_state.hero_generated and st.session_state.hero_image and st.session_state.hero_image.get("bytes"):
+            hero = st.session_state.hero_image
+            st.markdown("#### 📸 基準照預覽")
+            hero_img = Image.open(io.BytesIO(hero["bytes"]))
+            st.image(hero_img, caption=hero["label"], width=400)
+
+            if not st.session_state.remaining_generated:
+                if st.button("✅ 基準照 OK，生成其餘 7 張", type="primary", use_container_width=False):
+                    params = st.session_state.get("_gen_params", {})
+                    base_prompt = params.get("base_prompt", st.session_state.prompts.get("positive_en", ""))
+                    neg_prompt = params.get("neg_prompt", st.session_state.prompts.get("negative_en", ""))
+                    scene_desc = params.get("scene_desc", "")
+
+                    ref_part = None
+                    if uploaded_file:
+                        ref_part = types.Part.from_bytes(
+                            data=uploaded_file.getvalue(),
+                            mime_type=st.session_state.upload_mime or "image/jpeg"
+                        )
+
+                    hero_ref_part = types.Part.from_bytes(
+                        data=hero["bytes"], mime_type="image/png"
+                    )
+
+                    remaining_images = []
+                    progress_bar = st.progress(0, text="準備生成其餘照片…")
+
+                    remaining_shots = SHOT_CONFIGS[1:]
+                    for idx, shot in enumerate(remaining_shots):
+                        progress_bar.progress(
+                            idx / len(remaining_shots),
+                            text=f"正在生成 {shot['label']}（{idx+2}/8 · 參考基準照）…約需 30～60 秒"
+                        )
+                        result = generate_single_photo(
+                            api_key, shot, base_prompt, neg_prompt, scene_desc,
+                            ref_part, hero_ref_part=hero_ref_part,
+                        )
+                        remaining_images.append(result)
+
+                    progress_bar.progress(1.0, text="✅ 照片組生成完成！")
+
+                    # 合併所有照片
+                    all_images = [st.session_state.hero_image] + remaining_images
+                    st.session_state.model_images = all_images
+                    st.session_state.remaining_generated = True
+                    for img in all_images:
+                        if img.get("bytes"):
+                            st.session_state.model_image_bytes = img["bytes"]
+                            break
+                    success_count = sum(1 for i in all_images if i.get("bytes"))
+                    st.success(f"✅ 成功生成 {success_count} / 8 張照片！")
+                    _remaining_ok = sum(1 for r in remaining_images if r.get("bytes"))
+                    _c3b = _cost_gemini_images(_remaining_ok)
+                    st.session_state.cost_step3_total = st.session_state.get("cost_step3_total", 0.0) + _c3b
+                    st.info(f"💰 本步驟花費：${_c3b:.4f}（Gemini 圖片生成 {_remaining_ok} 張，預估值）")
+
+    # ── 個別重新生成處理 ──
+    def _get_regen_params():
+        """取得重新生成所需的共用參數"""
         scene_variants = SCENE_CONFIG.get(
             st.session_state.selected_scene or "清爽白背景（電商主圖）",
             ["pure white studio background, soft diffused studio lighting"]
         )
-        scene_desc = random.choice(scene_variants)
-
-        base_prompt = st.session_state.prompts["positive_en"] + f", {st.session_state.get('outfit_desc_en', '')}"
-        neg_prompt = st.session_state.prompts["negative_en"]
-
-        # 準備上傳的原始商品圖片
-        ref_part = None
+        sd = random.choice(scene_variants)
+        bp = st.session_state.prompts.get("positive_en", "") if st.session_state.prompts else ""
+        np_ = st.session_state.prompts.get("negative_en", "") if st.session_state.prompts else ""
+        rp = None
         if uploaded_file:
-            img_bytes = uploaded_file.getvalue()
-            mime_type = st.session_state.upload_mime or "image/jpeg"
-            ref_part = types.Part.from_bytes(data=img_bytes, mime_type=mime_type)
+            rp = types.Part.from_bytes(
+                data=uploaded_file.getvalue(),
+                mime_type=st.session_state.upload_mime or "image/jpeg"
+            )
+        return bp, np_, sd, rp
 
-        # ── Step 3a: 只生成第 1 張基準照 ──
-        hero_shot = SHOT_CONFIGS[0]
-        with st.spinner(f"正在生成基準照 {hero_shot['label']}…約需 30～60 秒"):
-            result = generate_single_photo(api_key, hero_shot, base_prompt, neg_prompt, scene_desc, ref_part)
+    # 處理重新生成請求（在顯示之前處理，避免 rerun 問題）
+    for regen_idx in range(8):
+        regen_key = f"regen_photo_{regen_idx}"
+        if st.session_state.get(regen_key):
+            st.session_state[regen_key] = False
+            if api_key and st.session_state.prompts and st.session_state.model_images:
+                bp, np_, sd, rp = _get_regen_params()
+                with st.spinner(f"🔄 正在重新生成第 {regen_idx+1} 張照片…"):
+                    result = generate_single_photo(api_key, SHOT_CONFIGS[regen_idx], bp, np_, sd, rp)
+                    st.session_state.model_images[regen_idx] = result
+                    # 更新 model_image_bytes
+                    for img in st.session_state.model_images:
+                        if img.get("bytes"):
+                            st.session_state.model_image_bytes = img["bytes"]
+                            break
+                if result.get("bytes"):
+                    st.success(f"✅ 第 {regen_idx+1} 張照片重新生成成功！")
+                    _c_regen = _cost_gemini_images(1)
+                    st.session_state.cost_step3_total = st.session_state.get("cost_step3_total", 0.0) + _c_regen
+                    st.info(f"💰 重新生成花費：${_c_regen:.4f}（Gemini 圖片生成 1 張，預估值）")
+                else:
+                    st.error(f"❌ 重新生成失敗：{result.get('error', '未知錯誤')}")
 
-        if result.get("bytes"):
-            st.session_state.hero_image = result
-            st.session_state.hero_generated = True
-            st.session_state.remaining_generated = False
-            # 初始化 model_images（先放第一張）
-            st.session_state.model_images = [result]
-            st.session_state.model_image_bytes = result["bytes"]
-            # 儲存生成參數供 Step 3b 使用
-            st.session_state["_gen_params"] = {
-                "base_prompt": base_prompt,
-                "neg_prompt": neg_prompt,
-                "scene_desc": scene_desc,
-            }
-            st.success("✅ 基準照生成完成！確認滿意後，按下方按鈕生成其餘 7 張。")
-            _c3a = _cost_gemini_images(1)
-            st.session_state.cost_step3_total = st.session_state.get("cost_step3_total", 0.0) + _c3a
-            st.info(f"💰 本步驟花費：${_c3a:.4f}（Gemini 圖片生成 1 張，預估值）")
-        else:
-            st.error(f"❌ 基準照生成失敗：{result.get('error', '未知錯誤')}")
+    # 顯示生成的照片組
+    if st.session_state.model_images:
+        st.markdown("### 📸 實穿照片組")
 
-    # ── 顯示基準照 & Step 3b 按鈕 ──
-    if st.session_state.hero_generated and st.session_state.hero_image and st.session_state.hero_image.get("bytes"):
-        hero = st.session_state.hero_image
-        st.markdown("#### 📸 基準照預覽")
-        hero_img = Image.open(io.BytesIO(hero["bytes"]))
-        st.image(hero_img, caption=hero["label"], width=400)
-
-        if not st.session_state.remaining_generated:
-            if st.button("✅ 基準照 OK，生成其餘 7 張", type="primary", use_container_width=False):
-                params = st.session_state.get("_gen_params", {})
-                base_prompt = params.get("base_prompt", st.session_state.prompts.get("positive_en", ""))
-                neg_prompt = params.get("neg_prompt", st.session_state.prompts.get("negative_en", ""))
-                scene_desc = params.get("scene_desc", "")
-
-                ref_part = None
-                if uploaded_file:
-                    ref_part = types.Part.from_bytes(
-                        data=uploaded_file.getvalue(),
-                        mime_type=st.session_state.upload_mime or "image/jpeg"
+        # 通用照片顯示函式
+        def _show_photo(img_data, idx, file_prefix):
+            if img_data.get("bytes"):
+                gen_img = Image.open(io.BytesIO(img_data["bytes"]))
+                st.image(gen_img, caption=img_data["label"], use_container_width=True)
+                btn_col1, btn_col2 = st.columns(2)
+                with btn_col1:
+                    st.download_button(
+                        label="💾 下載",
+                        data=img_data["bytes"],
+                        file_name=f"{file_prefix}_{idx+1}.png",
+                        mime="image/png",
+                        use_container_width=True,
+                        key=f"dl_{file_prefix}_{idx}",
                     )
-
-                hero_ref_part = types.Part.from_bytes(
-                    data=hero["bytes"], mime_type="image/png"
-                )
-
-                remaining_images = []
-                progress_bar = st.progress(0, text="準備生成其餘照片…")
-
-                remaining_shots = SHOT_CONFIGS[1:]
-                for idx, shot in enumerate(remaining_shots):
-                    progress_bar.progress(
-                        idx / len(remaining_shots),
-                        text=f"正在生成 {shot['label']}（{idx+2}/8 · 參考基準照）…約需 30～60 秒"
-                    )
-                    result = generate_single_photo(
-                        api_key, shot, base_prompt, neg_prompt, scene_desc,
-                        ref_part, hero_ref_part=hero_ref_part,
-                    )
-                    remaining_images.append(result)
-
-                progress_bar.progress(1.0, text="✅ 照片組生成完成！")
-
-                # 合併所有照片
-                all_images = [st.session_state.hero_image] + remaining_images
-                st.session_state.model_images = all_images
-                st.session_state.remaining_generated = True
-                for img in all_images:
-                    if img.get("bytes"):
-                        st.session_state.model_image_bytes = img["bytes"]
-                        break
-                success_count = sum(1 for i in all_images if i.get("bytes"))
-                st.success(f"✅ 成功生成 {success_count} / 8 張照片！")
-                _remaining_ok = sum(1 for r in remaining_images if r.get("bytes"))
-                _c3b = _cost_gemini_images(_remaining_ok)
-                st.session_state.cost_step3_total = st.session_state.get("cost_step3_total", 0.0) + _c3b
-                st.info(f"💰 本步驟花費：${_c3b:.4f}（Gemini 圖片生成 {_remaining_ok} 張，預估值）")
-
-# ── 個別重新生成處理 ──
-def _get_regen_params():
-    """取得重新生成所需的共用參數"""
-    scene_variants = SCENE_CONFIG.get(
-        st.session_state.selected_scene or "清爽白背景（電商主圖）",
-        ["pure white studio background, soft diffused studio lighting"]
-    )
-    sd = random.choice(scene_variants)
-    bp = st.session_state.prompts.get("positive_en", "") if st.session_state.prompts else ""
-    np_ = st.session_state.prompts.get("negative_en", "") if st.session_state.prompts else ""
-    rp = None
-    if uploaded_file:
-        rp = types.Part.from_bytes(
-            data=uploaded_file.getvalue(),
-            mime_type=st.session_state.upload_mime or "image/jpeg"
-        )
-    return bp, np_, sd, rp
-
-# 處理重新生成請求（在顯示之前處理，避免 rerun 問題）
-for regen_idx in range(8):
-    regen_key = f"regen_photo_{regen_idx}"
-    if st.session_state.get(regen_key):
-        st.session_state[regen_key] = False
-        if api_key and st.session_state.prompts and st.session_state.model_images:
-            bp, np_, sd, rp = _get_regen_params()
-            with st.spinner(f"🔄 正在重新生成第 {regen_idx+1} 張照片…"):
-                result = generate_single_photo(api_key, SHOT_CONFIGS[regen_idx], bp, np_, sd, rp)
-                st.session_state.model_images[regen_idx] = result
-                # 更新 model_image_bytes
-                for img in st.session_state.model_images:
-                    if img.get("bytes"):
-                        st.session_state.model_image_bytes = img["bytes"]
-                        break
-            if result.get("bytes"):
-                st.success(f"✅ 第 {regen_idx+1} 張照片重新生成成功！")
-                _c_regen = _cost_gemini_images(1)
-                st.session_state.cost_step3_total = st.session_state.get("cost_step3_total", 0.0) + _c_regen
-                st.info(f"💰 重新生成花費：${_c_regen:.4f}（Gemini 圖片生成 1 張，預估值）")
+                with btn_col2:
+                    if st.button("🔄 重新生成", key=f"btn_regen_{file_prefix}_{idx}", use_container_width=True):
+                        st.session_state[f"regen_photo_{idx}"] = True
+                        st.rerun()
             else:
-                st.error(f"❌ 重新生成失敗：{result.get('error', '未知錯誤')}")
-
-# 顯示生成的照片組
-if st.session_state.model_images:
-    st.markdown("### 📸 實穿照片組")
-
-    # 通用照片顯示函式
-    def _show_photo(img_data, idx, file_prefix):
-        if img_data.get("bytes"):
-            gen_img = Image.open(io.BytesIO(img_data["bytes"]))
-            st.image(gen_img, caption=img_data["label"], use_container_width=True)
-            btn_col1, btn_col2 = st.columns(2)
-            with btn_col1:
-                st.download_button(
-                    label="💾 下載",
-                    data=img_data["bytes"],
-                    file_name=f"{file_prefix}_{idx+1}.png",
-                    mime="image/png",
-                    use_container_width=True,
-                    key=f"dl_{file_prefix}_{idx}",
-                )
-            with btn_col2:
-                if st.button("🔄 重新生成", key=f"btn_regen_{file_prefix}_{idx}", use_container_width=True):
+                st.error(f"❌ {img_data['label']}：{img_data.get('error', '生成失敗')}")
+                if st.button("🔄 重新生成", key=f"btn_regen_{file_prefix}_err_{idx}", use_container_width=True):
                     st.session_state[f"regen_photo_{idx}"] = True
                     st.rerun()
-        else:
-            st.error(f"❌ {img_data['label']}：{img_data.get('error', '生成失敗')}")
-            if st.button("🔄 重新生成", key=f"btn_regen_{file_prefix}_err_{idx}", use_container_width=True):
-                st.session_state[f"regen_photo_{idx}"] = True
-                st.rerun()
 
-    total_imgs = len(st.session_state.model_images)
+        total_imgs = len(st.session_state.model_images)
 
-    # 第一行：3 張全身照（indices 0, 1, 2）
-    st.markdown("**👗 全身照**")
-    full_cols = st.columns(3)
-    for i in range(3):
-        with full_cols[i]:
-            if i < total_imgs:
-                _show_photo(st.session_state.model_images[i], i, "fullbody")
+        # 第一行：3 張全身照（indices 0, 1, 2）
+        st.markdown("**👗 全身照**")
+        full_cols = st.columns(3)
+        for i in range(3):
+            with full_cols[i]:
+                if i < total_imgs:
+                    _show_photo(st.session_state.model_images[i], i, "fullbody")
 
-    # 第二行：下半身特寫前 2 張（indices 3, 4）
-    if total_imgs > 3:
-        st.markdown("**🦵 下半身特寫**")
-        lower_cols1 = st.columns(2)
-        for i in range(2):
-            real_idx = i + 3
-            with lower_cols1[i]:
-                if real_idx < total_imgs:
-                    _show_photo(st.session_state.model_images[real_idx], real_idx, "lower")
+        # 第二行：下半身特寫前 2 張（indices 3, 4）
+        if total_imgs > 3:
+            st.markdown("**🦵 下半身特寫**")
+            lower_cols1 = st.columns(2)
+            for i in range(2):
+                real_idx = i + 3
+                with lower_cols1[i]:
+                    if real_idx < total_imgs:
+                        _show_photo(st.session_state.model_images[real_idx], real_idx, "lower")
 
-    # 第三行：下半身特寫後 2 張（indices 5, 6）
-    if total_imgs > 5:
-        lower_cols2 = st.columns(2)
-        for i in range(2):
-            real_idx = i + 5
-            with lower_cols2[i]:
-                if real_idx < total_imgs:
-                    _show_photo(st.session_state.model_images[real_idx], real_idx, "lower2")
+        # 第三行：下半身特寫後 2 張（indices 5, 6）
+        if total_imgs > 5:
+            lower_cols2 = st.columns(2)
+            for i in range(2):
+                real_idx = i + 5
+                with lower_cols2[i]:
+                    if real_idx < total_imgs:
+                        _show_photo(st.session_state.model_images[real_idx], real_idx, "lower2")
 
-    # 第四行：1 張屈膝坐姿（index 7）
-    if total_imgs > 7:
-        st.markdown("**🧎 屈膝坐姿**")
-        feet_col, _ = st.columns([1, 2])
-        with feet_col:
-            _show_photo(st.session_state.model_images[7], 7, "feet")
+        # 第四行：1 張屈膝坐姿（index 7）
+        if total_imgs > 7:
+            st.markdown("**🧎 屈膝坐姿**")
+            feet_col, _ = st.columns([1, 2])
+            with feet_col:
+                _show_photo(st.session_state.model_images[7], 7, "feet")
 
-    # 圖片資訊
-    successful = [i for i in st.session_state.model_images if i.get("bytes")]
-    if successful:
-        st.markdown("---")
-        st.markdown(f"📊 **圖片資訊**：共 {len(successful)} / 8 張成功")
-        for img_data in successful:
-            img_info = Image.open(io.BytesIO(img_data["bytes"]))
-            st.caption(f"  {img_data['label']}：{img_info.width}×{img_info.height}，{len(img_data['bytes'])/1024:.0f} KB")
+        # 圖片資訊
+        successful = [i for i in st.session_state.model_images if i.get("bytes")]
+        if successful:
+            st.markdown("---")
+            st.markdown(f"📊 **圖片資訊**：共 {len(successful)} / 8 張成功")
+            for img_data in successful:
+                img_info = Image.open(io.BytesIO(img_data["bytes"]))
+                st.caption(f"  {img_data['label']}：{img_info.width}×{img_info.height}，{len(img_data['bytes'])/1024:.0f} KB")
 
-    # 批次下載（全部 8 張都成功才顯示）
-    all_successful = [i for i in st.session_state.model_images if i.get("bytes")]
-    if len(st.session_state.model_images) >= 8 and len(all_successful) == 8:
-        st.markdown("---")
-        product_name = (
-            pathlib.Path(uploaded_file.name).stem if uploaded_file else "商品"
-        )
-        from datetime import datetime as _dt
-        zip_filename = f"實穿照_{product_name}_{_dt.now().strftime('%Y%m%d_%H%M%S')}.zip"
-        zip_buf = io.BytesIO()
-        with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-            for idx, img_data in enumerate(st.session_state.model_images):
-                if img_data.get("bytes"):
-                    entry_name = f"{idx+1}_{img_data['label']}.png"
-                    zf.writestr(entry_name, img_data["bytes"])
-        st.download_button(
-            label="📦 批次下載全部照片（ZIP）",
-            data=zip_buf.getvalue(),
-            file_name=zip_filename,
-            mime="application/zip",
-            use_container_width=False,
-        )
+        # 批次下載（全部 8 張都成功才顯示）
+        all_successful = [i for i in st.session_state.model_images if i.get("bytes")]
+        if len(st.session_state.model_images) >= 8 and len(all_successful) == 8:
+            st.markdown("---")
+            product_name = (
+                pathlib.Path(uploaded_file.name).stem if uploaded_file else "商品"
+            )
+            from datetime import datetime as _dt
+            zip_filename = f"實穿照_{product_name}_{_dt.now().strftime('%Y%m%d_%H%M%S')}.zip"
+            zip_buf = io.BytesIO()
+            with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+                for idx, img_data in enumerate(st.session_state.model_images):
+                    if img_data.get("bytes"):
+                        entry_name = f"{idx+1}_{img_data['label']}.png"
+                        zf.writestr(entry_name, img_data["bytes"])
+            st.download_button(
+                label="📦 批次下載全部照片（ZIP）",
+                data=zip_buf.getvalue(),
+                file_name=zip_filename,
+                mime="application/zip",
+                use_container_width=False,
+            )
 
-st.divider()
+if _is_full:
+    st.divider()
 
 # ─────────────────────────────────────────
 # STEP 4：生成社群貼文文案
 # ─────────────────────────────────────────
-st.markdown('<div class="step-header">Step 4 · ✍️ 生成 Instagram 社群貼文文案</div>', unsafe_allow_html=True)
+if show_step4:
+  st.markdown('<div class="step-header">Step 4 · ✍️ 生成 Instagram 社群貼文文案</div>', unsafe_allow_html=True)
 
-if not anthropic_key:
+  if not anthropic_key:
     st.warning("請先在左側 Sidebar 輸入 Anthropic API Key")
-else:
+  else:
+    # ── 雙模式選擇器 ──
+    _s4_pipeline_imgs = [i for i in (st.session_state.model_images or []) if i.get("bytes")]
+    _s4_has_pipeline = len(_s4_pipeline_imgs) > 0 or st.session_state.model_image_bytes is not None
+
+    if _s4_has_pipeline and _is_full:
+        _s4_source = st.radio(
+            "📷 圖片來源",
+            ["使用流程中的實穿照", "直接上傳圖片"],
+            key="s4_img_source",
+            horizontal=True,
+        )
+    elif not _is_full:
+        _s4_source = "直接上傳圖片"
+        st.info("📷 獨立模式：請上傳要用於生成文案的商品照片。")
+    else:
+        _s4_source = "直接上傳圖片"
+
+    # 準備圖片列表
+    _s4_images = []  # list of (bytes, mime_type)
+
+    if _s4_source == "使用流程中的實穿照":
+        for si in _s4_pipeline_imgs[:8]:
+            _s4_images.append((si["bytes"], "image/png"))
+        if not _s4_images and st.session_state.model_image_bytes:
+            _s4_images.append((st.session_state.model_image_bytes, "image/png"))
+    else:
+        _s4_uploads = st.file_uploader(
+            "上傳商品/實穿照片（可多選，最多 8 張）",
+            type=["jpg", "jpeg", "png", "webp"],
+            accept_multiple_files=True,
+            key="s4_upload_imgs",
+        )
+        if _s4_uploads:
+            for f in _s4_uploads[:8]:
+                f.seek(0)
+                _s4_images.append((f.read(), f.type or "image/jpeg"))
+            # 預覽
+            _s4_pcols = st.columns(min(len(_s4_uploads), 4))
+            for idx, f in enumerate(_s4_uploads[:8]):
+                with _s4_pcols[idx % len(_s4_pcols)]:
+                    st.image(f, width=140)
+
     col_style, col_lang = st.columns(2)
     with col_style:
         caption_style = st.selectbox(
@@ -1406,14 +1482,23 @@ else:
         help="可補充材質、特色、價格等，讓文案更精準"
     )
 
-    # 判斷是否有實穿照可參考（多張或單張）
-    successful_images = [i for i in (st.session_state.model_images or []) if i.get("bytes")]
-    has_model_image = len(successful_images) > 0 or st.session_state.model_image_bytes is not None
+    # 獨立模式時可手動輸入場景資訊
+    if _s4_source == "直接上傳圖片":
+        _s4_scene_manual = st.text_input(
+            "🏠 場景描述（選填）",
+            placeholder="例：咖啡廳午後、日系街道散步、白色簡約背景…",
+            help="補充拍攝場景資訊讓文案更精準；留空時 AI 會自動從照片判斷",
+            key="s4_scene_manual",
+        )
+    else:
+        _s4_scene_manual = ""
+
+    has_model_image = len(_s4_images) > 0
     if not has_model_image:
-        st.info("💡 建議先完成 Step 3 生成實穿照，文案將根據實穿照的場景情境撰寫更精準的內容。")
+        st.info("💡 請上傳圖片或先完成 Step 3 生成實穿照，文案將根據照片的場景情境撰寫更精準的內容。")
 
     if st.button("✍️ 生成社群貼文文案", type="primary", use_container_width=False):
-        with st.spinner("Claude 正在根據實穿照撰寫情境文案…" if has_model_image else "Claude 正在撰寫文案…"):
+        with st.spinner("Claude 正在根據照片撰寫情境文案…" if has_model_image else "Claude 正在撰寫文案…"):
             try:
                 claude_client = anthropic.Anthropic(api_key=anthropic_key)
 
@@ -1425,8 +1510,8 @@ else:
 
                 extra = f"\n- 商品特色補充：{product_desc}" if product_desc else ""
 
-                # 取得 Step 2 的場景與襪子資訊
-                scene_name = st.session_state.selected_scene or "未指定"
+                # 場景資訊：優先使用手動輸入，否則取 Step 2
+                scene_name = _s4_scene_manual if _s4_scene_manual else (st.session_state.selected_scene or "未指定（請根據照片自行判斷）")
                 prompt_en = st.session_state.prompts.get("positive_en", "") if st.session_state.prompts else ""
 
                 caption_prompt = f"""你是一位專業的電商社群媒體文案師，擅長韓系時尚品牌的 Instagram 行銷。
@@ -1464,26 +1549,15 @@ else:
 （20～25個，分行整理，涵蓋：商品、穿搭、韓系、場景情境、季節、品味生活 等主題）
 """
 
-                # 組合訊息內容：附上所有成功的實穿照（最多 8 張）
+                # 組合訊息內容
                 message_content = []
-                if successful_images:
-                    for si in successful_images[:8]:
-                        img_b64 = base64.standard_b64encode(si["bytes"]).decode("utf-8")
-                        message_content.append({
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/png",
-                                "data": img_b64,
-                            },
-                        })
-                elif st.session_state.model_image_bytes:
-                    img_b64 = base64.standard_b64encode(st.session_state.model_image_bytes).decode("utf-8")
+                for _s4_img_bytes, _s4_img_mime in _s4_images:
+                    img_b64 = base64.standard_b64encode(_s4_img_bytes).decode("utf-8")
                     message_content.append({
                         "type": "image",
                         "source": {
                             "type": "base64",
-                            "media_type": "image/png",
+                            "media_type": _s4_img_mime,
                             "data": img_b64,
                         },
                     })
@@ -1496,7 +1570,7 @@ else:
                     messages=[{"role": "user", "content": message_content}],
                 )
                 st.session_state.captions = response.content[0].text
-                st.success("✅ 文案生成完成！（已參考實穿照場景）" if has_model_image else "✅ 文案生成完成！")
+                st.success("✅ 文案生成完成！（已參考照片場景）" if has_model_image else "✅ 文案生成完成！")
                 _inp4 = response.usage.input_tokens
                 _out4 = response.usage.output_tokens
                 _c4 = _cost_claude(_inp4, _out4)
@@ -1506,7 +1580,7 @@ else:
             except Exception as e:
                 st.error(f"❌ 文案生成失敗：{e}")
 
-if st.session_state.captions:
+if show_step4 and st.session_state.captions:
     edited_caption = st.text_area(
         "📝 貼文文案（可直接編輯後複製使用）",
         value=st.session_state.captions,
@@ -1535,7 +1609,7 @@ if st.session_state.captions:
 _sel_batch = st.session_state.get("selected_files", [])
 _bp = st.session_state.get("_batch_params")
 
-if len(_sel_batch) > 1 and _bp:
+if show_batch and len(_sel_batch) > 1 and _bp:
     st.markdown('<div class="step-header">批次處理 · 🚀 對全部選中圖片執行完整流程</div>', unsafe_allow_html=True)
     st.markdown(
         f"已選取 **{len(_sel_batch)}** 張圖片。點擊下方按鈕，系統將依序對每張圖片執行"
@@ -1784,8 +1858,6 @@ Return ONLY a valid JSON object (no markdown, no extra text) with this exact str
 # ─────────────────────────────────────────
 # STEP 5：生成穿搭短影音（Kling 3.0）
 # ─────────────────────────────────────────
-st.markdown('<div class="step-header">Step 5 · 🎬 生成穿搭短影音（Kling 3.0）</div>', unsafe_allow_html=True)
-
 def _kling_jwt(ak, sk):
     """生成 Kling AI JWT Token"""
     import jwt as pyjwt
@@ -1798,267 +1870,305 @@ def _kling_jwt(ak, sk):
     }
     return pyjwt.encode(payload, sk, algorithm="HS256", headers=headers)
 
-if not st.session_state.model_images:
-    st.info("請先完成 Step 3 生成實穿照片組")
-elif not kling_ak or not kling_sk:
+if show_step5:
+  st.markdown('<div class="step-header">Step 5 · 🎬 生成穿搭短影音（Kling 3.0）</div>', unsafe_allow_html=True)
+
+  if not kling_ak or not kling_sk:
     st.warning("請先在左側 Sidebar 展開「🎬 Kling AI Key」輸入 Access Key 和 Secret Key")
     st.markdown(
         '<div class="info-box">💡 前往 <a href="https://kling.ai/dev/resource-pack-manage" target="_blank">kling.ai/dev/resource-pack-manage</a> 取得 API Key</div>',
         unsafe_allow_html=True,
     )
-else:
-    successful_imgs = [i for i in st.session_state.model_images if i.get("bytes")]
-    if not successful_imgs:
-        st.warning("沒有可用的實穿照片，請先在 Step 3 生成")
+  else:
+    # ── 雙模式選擇器 ──
+    _s5_pipeline_imgs = [i for i in (st.session_state.model_images or []) if i.get("bytes")]
+    _s5_has_pipeline = len(_s5_pipeline_imgs) > 0
+
+    if _s5_has_pipeline and _is_full:
+        _s5_source = st.radio(
+            "📷 圖片來源",
+            ["使用流程中的實穿照", "直接上傳圖片"],
+            key="s5_img_source",
+            horizontal=True,
+        )
+    elif not _is_full:
+        _s5_source = "直接上傳圖片"
+        st.info("📷 獨立模式：請上傳要作為影片起始畫面的照片。")
     else:
-        st.markdown("從實穿照片中選擇**起始畫面**及**參考照片**，Kling 3.0 會自動生成動態影片。")
+        _s5_source = "直接上傳圖片"
 
-        # 選擇起始照片（用於 API image 參數）
-        img_labels = [img["label"] for img in successful_imgs]
-        selected_img_label = st.selectbox("📷 選擇起始畫面（API 主參考圖）", img_labels, key="video_source_img")
-        selected_img_data = next(i for i in successful_imgs if i["label"] == selected_img_label)
+    # 準備圖片
+    successful_imgs = []
+    selected_img_data = None
 
-        # 預覽選擇的照片
-        preview_img = Image.open(io.BytesIO(selected_img_data["bytes"]))
-        st.image(preview_img, caption=f"起始畫面：{selected_img_label}", width=300)
-
-        # 多選參考照片（用於強化 prompt 的圖案描述）
-        st.markdown("**參考照片**：選擇要加入 prompt 強調的照片（Kling API 目前僅支援單張主圖，其餘以 prompt 描述補強）")
-        ref_img_labels = st.multiselect(
-            "📸 選擇參考照片（可多選，預設全選）",
-            img_labels,
-            default=img_labels,
-            key="video_ref_imgs",
-            help="所選照片的數量與樣式特徵會加入 prompt，幫助 Kling 保持更準確的襪子圖案。",
-        )
-        ref_img_count = len(ref_img_labels)
-
-        # 影片設定
-        col_ratio, col_dur = st.columns(2)
-        with col_ratio:
-            video_ratio = st.selectbox("📐 影片比例", ["9:16（直式 Reels）", "16:9（橫式）", "1:1（正方形）"], key="video_ratio")
-        with col_dur:
-            video_duration = st.selectbox("⏱️ 影片長度", ["5 秒", "10 秒", "15 秒"], key="video_duration")
-
-        col_mode, col_sound = st.columns(2)
-        with col_mode:
-            video_mode = st.selectbox("🎬 畫質模式", ["std（標準）", "pro（專業）"], key="video_mode")
-        with col_sound:
-            video_sound = st.selectbox("🔊 音效", ["on（開啟）", "off（關閉）"], key="video_sound")
-
-        col_bgm, col_vol = st.columns(2)
-        with col_bgm:
-            add_bgm = st.checkbox(
-                "🎵 疊加背景音樂（BGM）",
-                value=True,
-                key="add_bgm",
-                help="影片生成後，用程式合成 C 大調和弦環境音樂疊入影片（需安裝 moviepy）。",
-            )
-        with col_vol:
-            bgm_volume = st.slider(
-                "🔉 BGM 音量",
-                min_value=0.05,
-                max_value=1.0,
-                value=0.25,
-                step=0.05,
-                key="bgm_volume",
-                disabled=not add_bgm,
-            )
-
-        # 從 Step 2 分析結果擷取襪子圖案描述
-        _sock_desc_hint = ""
-        if st.session_state.get("prompts", {}).get("positive_en"):
-            _sock_desc_hint = (
-                f" The socks in this video have the following characteristics: "
-                f"{st.session_state.prompts['positive_en'][:300]}."
-            )
-
-        # 多照片參考備注
-        _ref_note = (
-            f" This video references {ref_img_count} styled photos — ensure the sock pattern is consistent across all of them."
-            if ref_img_count > 1 else ""
-        )
-
-        # ── 影片風格選擇器 ──
-        _style_map = {
-            "自動匹配": None,
-            "日系甜美": "A",
-            "韓系街拍": "B",
-            "咖啡廳慵懶": "C",
-            "校園青春": "D",
-        }
-        selected_style_label = st.selectbox(
-            "🎬 影片風格",
-            list(_style_map.keys()),
-            key="video_style_select",
-            help="自動匹配會根據 Step 2 選擇的場景決定風格；也可手動指定。",
-        )
-        _chosen_tmpl_key = _style_map[selected_style_label]
-        if _chosen_tmpl_key is None:
-            _scene_key = st.session_state.get("selected_scene") or ""
-            _chosen_tmpl_key = _match_video_prompt_template(_scene_key)
-            _style_display = f"自動匹配 → {VIDEO_PROMPT_TEMPLATES[_chosen_tmpl_key]['name']}"
+    if _s5_source == "使用流程中的實穿照":
+        successful_imgs = _s5_pipeline_imgs
+        if not successful_imgs:
+            st.warning("沒有可用的實穿照片，請先在 Step 3 生成或切換為「直接上傳圖片」")
         else:
-            _style_display = VIDEO_PROMPT_TEMPLATES[_chosen_tmpl_key]["name"]
-        st.caption(f"目前風格：**{_style_display}**")
+            st.markdown("從實穿照片中選擇**起始畫面**及**參考照片**，Kling 3.0 會自動生成動態影片。")
+            img_labels = [img["label"] for img in successful_imgs]
+            selected_img_label = st.selectbox("📷 選擇起始畫面（API 主參考圖）", img_labels, key="video_source_img")
+            selected_img_data = next(i for i in successful_imgs if i["label"] == selected_img_label)
+            preview_img = Image.open(io.BytesIO(selected_img_data["bytes"]))
+            st.image(preview_img, caption=f"起始畫面：{selected_img_label}", width=300)
 
-        # 組合 prompt：模板動態段 + 固定準確性後綴 + 圖案描述 + 多照參考備注
-        video_prompt_default = (
-            VIDEO_PROMPT_TEMPLATES[_chosen_tmpl_key]["prompt"]
-            + _VIDEO_PROMPT_FIXED_SUFFIX
-            + _sock_desc_hint
-            + _ref_note
+            st.markdown("**參考照片**：選擇要加入 prompt 強調的照片（Kling API 目前僅支援單張主圖，其餘以 prompt 描述補強）")
+            ref_img_labels = st.multiselect(
+                "📸 選擇參考照片（可多選，預設全選）",
+                img_labels,
+                default=img_labels,
+                key="video_ref_imgs",
+                help="所選照片的數量與樣式特徵會加入 prompt，幫助 Kling 保持更準確的襪子圖案。",
+            )
+    else:
+        _s5_upload = st.file_uploader(
+            "上傳起始畫面照片（單張）",
+            type=["jpg", "jpeg", "png", "webp"],
+            accept_multiple_files=False,
+            key="s5_upload_img",
         )
+        if _s5_upload:
+            _s5_upload.seek(0)
+            _s5_upload_bytes = _s5_upload.read()
+            selected_img_data = {"bytes": _s5_upload_bytes, "label": _s5_upload.name}
+            successful_imgs = [selected_img_data]
+            preview_img = Image.open(io.BytesIO(_s5_upload_bytes))
+            st.image(preview_img, caption=f"起始畫面：{_s5_upload.name}", width=300)
+            ref_img_labels = []
 
-        # 當風格變更時，自動更新 text_area 內容（覆蓋手動編輯）
-        _prev_tmpl_key = st.session_state.get("_prev_video_tmpl_key")
-        if _prev_tmpl_key != _chosen_tmpl_key:
-            st.session_state["video_prompt_input"] = video_prompt_default
-            st.session_state["_prev_video_tmpl_key"] = _chosen_tmpl_key
+    try:
+        ref_img_count = len(ref_img_labels)
+    except NameError:
+        ref_img_count = 0
 
-        video_prompt = st.text_area(
-            "🎬 影片動態描述（可自訂）",
-            value=video_prompt_default,
-            height=140,
-            key="video_prompt_input",
-            help="根據選擇的風格自動填入，仍可手動編輯。影片會以選擇的照片為起始畫面。"
-        )
+    if selected_img_data:
+      # 影片設定
+      col_ratio, col_dur = st.columns(2)
+      with col_ratio:
+          video_ratio = st.selectbox("📐 影片比例", ["9:16（直式 Reels）", "16:9（橫式）", "1:1（正方形）"], key="video_ratio")
+      with col_dur:
+          video_duration = st.selectbox("⏱️ 影片長度", ["5 秒", "10 秒", "15 秒"], key="video_duration")
 
-        if st.button("🎬 生成穿搭短影音", type="primary", use_container_width=False):
-            with st.spinner("🎬 Kling 3.0 正在生成影片，約需 2～5 分鐘，請耐心等待…"):
-                try:
-                    import time as _time
-                    import requests as _requests
+      col_mode, col_sound = st.columns(2)
+      with col_mode:
+          video_mode = st.selectbox("🎬 畫質模式", ["std（標準）", "pro（專業）"], key="video_mode")
+      with col_sound:
+          video_sound = st.selectbox("🔊 音效", ["on（開啟）", "off（關閉）"], key="video_sound")
 
-                    # 解析設定
-                    aspect = "9:16" if "9:16" in video_ratio else ("1:1" if "1:1" in video_ratio else "16:9")
-                    duration = 5 if video_duration.startswith("5") else (15 if video_duration.startswith("15") else 10)
-                    mode = "std" if "std" in video_mode else "pro"
-                    sound = "on" if "on" in video_sound else "off"
+      col_bgm, col_vol = st.columns(2)
+      with col_bgm:
+          add_bgm = st.checkbox(
+              "🎵 疊加背景音樂（BGM）",
+              value=True,
+              key="add_bgm",
+              help="影片生成後，用程式合成 C 大調和弦環境音樂疊入影片（需安裝 moviepy）。",
+          )
+      with col_vol:
+          bgm_volume = st.slider(
+              "🔉 BGM 音量",
+              min_value=0.05,
+              max_value=1.0,
+              value=0.25,
+              step=0.05,
+              key="bgm_volume",
+              disabled=not add_bgm,
+          )
 
-                    # 將圖片轉為 Base64
-                    img_b64 = base64.standard_b64encode(selected_img_data["bytes"]).decode("utf-8")
+      # 從 Step 2 分析結果擷取襪子圖案描述
+      _sock_desc_hint = ""
+      if st.session_state.get("prompts", {}).get("positive_en"):
+          _sock_desc_hint = (
+              f" The socks in this video have the following characteristics: "
+              f"{st.session_state.prompts['positive_en'][:300]}."
+          )
 
-                    # 生成 JWT Token
-                    token = _kling_jwt(kling_ak, kling_sk)
+      # 多照片參考備注
+      _ref_note = (
+          f" This video references {ref_img_count} styled photos — ensure the sock pattern is consistent across all of them."
+          if ref_img_count > 1 else ""
+      )
 
-                    # 發起 image-to-video 任務（依序嘗試多個區域端點）
-                    _kling_endpoints = [
-                        "https://api-global.klingai.com",
-                        "https://api-singapore.klingai.com",
-                        "https://api-beijing.klingai.com",
-                    ]
-                    create_data = None
-                    _kling_last_err = ""
-                    for _ep in _kling_endpoints:
-                        try:
-                            create_resp = _requests.post(
-                                f"{_ep}/v1/videos/image2video",
-                                headers={
-                                    "Authorization": f"Bearer {token}",
-                                    "Content-Type": "application/json",
-                                },
-                                json={
-                                    "model_name": "kling-v3",
-                                    "mode": mode,
-                                    "duration": str(duration),
-                                    "aspect_ratio": aspect,
-                                    "image": img_b64,
-                                    "prompt": video_prompt,
-                                    "sound": sound,
-                                },
-                                timeout=30,
-                            )
-                            if create_resp.status_code == 200 and create_resp.text.strip():
-                                create_data = create_resp.json()
-                                KLING_BASE = _ep
-                                break
-                            else:
-                                _kling_last_err = f"{_ep} → HTTP {create_resp.status_code}, body={create_resp.text[:200]}"
-                        except Exception as _ep_err:
-                            _kling_last_err = f"{_ep} → {_ep_err}"
-                            continue
+      # ── 影片風格選擇器 ──
+      _style_map = {
+          "自動匹配": None,
+          "日系甜美": "A",
+          "韓系街拍": "B",
+          "咖啡廳慵懶": "C",
+          "校園青春": "D",
+      }
+      selected_style_label = st.selectbox(
+          "🎬 影片風格",
+          list(_style_map.keys()),
+          key="video_style_select",
+          help="自動匹配會根據 Step 2 選擇的場景決定風格；也可手動指定。",
+      )
+      _chosen_tmpl_key = _style_map[selected_style_label]
+      if _chosen_tmpl_key is None:
+          _scene_key = st.session_state.get("selected_scene") or ""
+          _chosen_tmpl_key = _match_video_prompt_template(_scene_key)
+          _style_display = f"自動匹配 → {VIDEO_PROMPT_TEMPLATES[_chosen_tmpl_key]['name']}"
+      else:
+          _style_display = VIDEO_PROMPT_TEMPLATES[_chosen_tmpl_key]["name"]
+      st.caption(f"目前風格：**{_style_display}**")
 
-                    if create_data is None:
-                        st.error(f"❌ 所有 Kling API 端點均無法連線：{_kling_last_err}")
-                    elif create_data.get("code") != 0:
-                        st.error(f"❌ 任務建立失敗：{create_data.get('message', create_data)}")
-                    else:
-                        task_id = create_data["data"]["task_id"]
-                        st.info(f"📋 任務已建立，Task ID: `{task_id}`")
+      # 組合 prompt：模板動態段 + 固定準確性後綴 + 圖案描述 + 多照參考備注
+      video_prompt_default = (
+          VIDEO_PROMPT_TEMPLATES[_chosen_tmpl_key]["prompt"]
+          + _VIDEO_PROMPT_FIXED_SUFFIX
+          + _sock_desc_hint
+          + _ref_note
+      )
 
-                        # 輪詢等待完成
-                        progress = st.progress(0, text="影片生成中…")
-                        poll_count = 0
-                        max_polls = 60  # 最多等 10 分鐘
+      # 當風格變更時，自動更新 text_area 內容（覆蓋手動編輯）
+      _prev_tmpl_key = st.session_state.get("_prev_video_tmpl_key")
+      if _prev_tmpl_key != _chosen_tmpl_key:
+          st.session_state["video_prompt_input"] = video_prompt_default
+          st.session_state["_prev_video_tmpl_key"] = _chosen_tmpl_key
 
-                        video_url = None
-                        while poll_count < max_polls:
-                            poll_count += 1
-                            progress.progress(
-                                min(poll_count / max_polls, 0.95),
-                                text=f"影片生成中… 已等待 {poll_count * 10} 秒"
-                            )
-                            _time.sleep(10)
+      video_prompt = st.text_area(
+          "🎬 影片動態描述（可自訂）",
+          value=video_prompt_default,
+          height=140,
+          key="video_prompt_input",
+          help="根據選擇的風格自動填入，仍可手動編輯。影片會以選擇的照片為起始畫面。"
+      )
 
-                            # 重新生成 token（避免過期）
-                            token = _kling_jwt(kling_ak, kling_sk)
-                            query_resp = _requests.get(
-                                f"{KLING_BASE}/v1/videos/image2video/{task_id}",
-                                headers={"Authorization": f"Bearer {token}"},
-                                timeout=30,
-                            )
-                            if not query_resp.text.strip():
-                                continue  # 空回應，重試
-                            query_data = query_resp.json()
+      if st.button("🎬 生成穿搭短影音", type="primary", use_container_width=False):
+          with st.spinner("🎬 Kling 3.0 正在生成影片，約需 2～5 分鐘，請耐心等待…"):
+              try:
+                  import time as _time
+                  import requests as _requests
 
-                            if query_data.get("code") != 0:
-                                st.error(f"❌ 查詢失敗：{query_data.get('message', query_data)}")
-                                break
+                  # 解析設定
+                  aspect = "9:16" if "9:16" in video_ratio else ("1:1" if "1:1" in video_ratio else "16:9")
+                  duration = 5 if video_duration.startswith("5") else (15 if video_duration.startswith("15") else 10)
+                  mode = "std" if "std" in video_mode else "pro"
+                  sound = "on" if "on" in video_sound else "off"
 
-                            task_status = query_data["data"]["task_status"]
-                            if task_status == "succeed":
-                                videos = query_data["data"].get("task_result", {}).get("videos", [])
-                                if videos:
-                                    video_url = videos[0].get("url")
-                                break
-                            elif task_status == "failed":
-                                fail_reason = query_data["data"].get("task_status_msg", "未知原因")
-                                st.error(f"❌ 影片生成失敗：{fail_reason}")
-                                break
+                  # 將圖片轉為 Base64
+                  img_b64 = base64.standard_b64encode(selected_img_data["bytes"]).decode("utf-8")
 
-                        if video_url:
-                            progress.progress(1.0, text="✅ 影片生成完成！正在下載…")
-                            # 下載影片
-                            vid_resp = _requests.get(video_url, timeout=120)
-                            vid_resp.raise_for_status()
-                            raw_video = vid_resp.content
+                  # 生成 JWT Token
+                  token = _kling_jwt(kling_ak, kling_sk)
 
-                            # 疊加背景音樂（BGM）
-                            if add_bgm:
-                                with st.spinner("🎵 疊加背景音樂中，請稍候…"):
-                                    raw_video = _mix_bgm_into_video(raw_video, bgm_volume)
+                  # 發起 image-to-video 任務（依序嘗試多個區域端點）
+                  _kling_endpoints = [
+                      "https://api-global.klingai.com",
+                      "https://api-singapore.klingai.com",
+                      "https://api-beijing.klingai.com",
+                  ]
+                  create_data = None
+                  _kling_last_err = ""
+                  for _ep in _kling_endpoints:
+                      try:
+                          create_resp = _requests.post(
+                              f"{_ep}/v1/videos/image2video",
+                              headers={
+                                  "Authorization": f"Bearer {token}",
+                                  "Content-Type": "application/json",
+                              },
+                              json={
+                                  "model_name": "kling-v3",
+                                  "mode": mode,
+                                  "duration": str(duration),
+                                  "aspect_ratio": aspect,
+                                  "image": img_b64,
+                                  "prompt": video_prompt,
+                                  "sound": sound,
+                              },
+                              timeout=30,
+                          )
+                          if create_resp.status_code == 200 and create_resp.text.strip():
+                              create_data = create_resp.json()
+                              KLING_BASE = _ep
+                              break
+                          else:
+                              _kling_last_err = f"{_ep} → HTTP {create_resp.status_code}, body={create_resp.text[:200]}"
+                      except Exception as _ep_err:
+                          _kling_last_err = f"{_ep} → {_ep_err}"
+                          continue
 
-                            st.session_state.video_bytes = raw_video
-                            st.success(f"✅ 穿搭短影音生成成功！（Kling 3.0 · {mode} · {duration}s{' · 含 BGM' if add_bgm else ''}）")
-                            _c5 = _cost_kling(duration, mode)
-                            st.session_state.cost_step5 = _c5
-                            st.info(f"💰 本步驟花費：${_c5:.4f}（Kling v3 · {mode} · {duration} 秒，預估值）")
-                        elif task_status != "failed":
-                            st.error("❌ 影片生成超時（已等待 10 分鐘），請稍後再試。")
+                  if create_data is None:
+                      st.error(f"❌ 所有 Kling API 端點均無法連線：{_kling_last_err}")
+                  elif create_data.get("code") != 0:
+                      st.error(f"❌ 任務建立失敗：{create_data.get('message', create_data)}")
+                  else:
+                      task_id = create_data["data"]["task_id"]
+                      st.info(f"📋 任務已建立，Task ID: `{task_id}`")
 
-                except Exception as e:
-                    import traceback
-                    st.error(f"❌ 影片生成失敗：{e}")
-                    st.code(traceback.format_exc(), language="text")
-                    st.markdown(
-                        '<div class="info-box">💡 提示：請確認 Kling AI API Key 正確且有足夠配額。'
-                        '前往 <a href="https://kling.ai/dev/resource-pack-manage" target="_blank">kling.ai/dev/resource-pack-manage</a> 查看。</div>',
-                        unsafe_allow_html=True,
-                    )
+                      # 輪詢等待完成
+                      progress = st.progress(0, text="影片生成中…")
+                      poll_count = 0
+                      max_polls = 60  # 最多等 10 分鐘
+
+                      video_url = None
+                      while poll_count < max_polls:
+                          poll_count += 1
+                          progress.progress(
+                              min(poll_count / max_polls, 0.95),
+                              text=f"影片生成中… 已等待 {poll_count * 10} 秒"
+                          )
+                          _time.sleep(10)
+
+                          # 重新生成 token（避免過期）
+                          token = _kling_jwt(kling_ak, kling_sk)
+                          query_resp = _requests.get(
+                              f"{KLING_BASE}/v1/videos/image2video/{task_id}",
+                              headers={"Authorization": f"Bearer {token}"},
+                              timeout=30,
+                          )
+                          if not query_resp.text.strip():
+                              continue  # 空回應，重試
+                          query_data = query_resp.json()
+
+                          if query_data.get("code") != 0:
+                              st.error(f"❌ 查詢失敗：{query_data.get('message', query_data)}")
+                              break
+
+                          task_status = query_data["data"]["task_status"]
+                          if task_status == "succeed":
+                              videos = query_data["data"].get("task_result", {}).get("videos", [])
+                              if videos:
+                                  video_url = videos[0].get("url")
+                              break
+                          elif task_status == "failed":
+                              fail_reason = query_data["data"].get("task_status_msg", "未知原因")
+                              st.error(f"❌ 影片生成失敗：{fail_reason}")
+                              break
+
+                      if video_url:
+                          progress.progress(1.0, text="✅ 影片生成完成！正在下載…")
+                          # 下載影片
+                          vid_resp = _requests.get(video_url, timeout=120)
+                          vid_resp.raise_for_status()
+                          raw_video = vid_resp.content
+
+                          # 疊加背景音樂（BGM）
+                          if add_bgm:
+                              with st.spinner("🎵 疊加背景音樂中，請稍候…"):
+                                  raw_video = _mix_bgm_into_video(raw_video, bgm_volume)
+
+                          st.session_state.video_bytes = raw_video
+                          st.success(f"✅ 穿搭短影音生成成功！（Kling 3.0 · {mode} · {duration}s{' · 含 BGM' if add_bgm else ''}）")
+                          _c5 = _cost_kling(duration, mode)
+                          st.session_state.cost_step5 = _c5
+                          st.info(f"💰 本步驟花費：${_c5:.4f}（Kling v3 · {mode} · {duration} 秒，預估值）")
+                      elif task_status != "failed":
+                          st.error("❌ 影片生成超時（已等待 10 分鐘），請稍後再試。")
+
+              except Exception as e:
+                  import traceback
+                  st.error(f"❌ 影片生成失敗：{e}")
+                  st.code(traceback.format_exc(), language="text")
+                  st.markdown(
+                      '<div class="info-box">💡 提示：請確認 Kling AI API Key 正確且有足夠配額。'
+                      '前往 <a href="https://kling.ai/dev/resource-pack-manage" target="_blank">kling.ai/dev/resource-pack-manage</a> 查看。</div>',
+                      unsafe_allow_html=True,
+                  )
 
 # 顯示已生成的影片
-if st.session_state.video_bytes:
+if show_step5 and st.session_state.video_bytes:
     st.markdown("### 🎥 穿搭短影音預覽")
     st.video(st.session_state.video_bytes, format="video/mp4")
 
@@ -2074,35 +2184,50 @@ if st.session_state.video_bytes:
     with col_vdl2:
         st.markdown(f"**影片資訊**：`{len(st.session_state.video_bytes)/1024/1024:.1f} MB`")
 
-st.divider()
+if _is_full:
+    st.divider()
 
 # ─────────────────────────────────────────
 # STEP 6：電商首圖製作（實穿照 + 商品去背圖 + 行銷文字）
 # ─────────────────────────────────────────
-st.markdown('<div class="step-header">Step 6 · 🏷️ 電商首圖製作（實穿照 + 商品圖 + 行銷文字）</div>', unsafe_allow_html=True)
-
 # Session state 初始化
 if "hero_banner_bytes" not in st.session_state:
     st.session_state.hero_banner_bytes = None
 if "cost_step6" not in st.session_state:
     st.session_state.cost_step6 = 0.0
 
-if not api_key:
+if show_step6:
+  st.markdown('<div class="step-header">Step 6 · 🏷️ 電商首圖製作（實穿照 + 商品圖 + 行銷文字）</div>', unsafe_allow_html=True)
+
+  if not api_key:
     st.warning("請先在左側 Sidebar 輸入 Gemini API Key")
-else:
+  else:
     st.markdown(
         '<div class="info-box">💡 選擇一張模特兒實穿照作為主視覺，搭配各顏色款式的商品去背圖，'
         'AI 會將行銷文字與所有素材合成為專業電商首圖。</div>',
         unsafe_allow_html=True,
     )
 
-    # ── 區塊 A：選擇模特兒實穿照（來自 Step 3）──
+    # ── 區塊 A：選擇模特兒實穿照 ──
     st.markdown("#### 📷 主視覺：模特兒實穿照")
     _s6_model_imgs = [i for i in (st.session_state.model_images or []) if i.get("bytes")]
     _s6_selected_model_bytes = None
 
-    if _s6_model_imgs:
-        # 顯示所有實穿照供勾選
+    # 雙模式選擇器
+    if _s6_model_imgs and _is_full:
+        _s6_model_source = st.radio(
+            "實穿照來源",
+            ["使用流程中的實穿照", "直接上傳照片"],
+            key="s6_model_source",
+            horizontal=True,
+        )
+    elif not _is_full:
+        _s6_model_source = "直接上傳照片"
+        st.info("📷 獨立模式：請上傳模特兒實穿照或商品照片。")
+    else:
+        _s6_model_source = "直接上傳照片"
+
+    if _s6_model_source == "使用流程中的實穿照" and _s6_model_imgs:
         _s6_cols_per_row = min(len(_s6_model_imgs), 4)
         _s6_cols = st.columns(_s6_cols_per_row)
         for idx, img_data in enumerate(_s6_model_imgs):
@@ -2118,7 +2243,17 @@ else:
         _s6_selected_model = next(i for i in _s6_model_imgs if i["label"] == _s6_selected_label)
         _s6_selected_model_bytes = _s6_selected_model["bytes"]
     else:
-        st.info("尚未生成實穿照。可先完成 Step 3，或直接上傳商品去背圖使用。")
+        _s6_model_upload = st.file_uploader(
+            "上傳模特兒實穿照（選填，單張）",
+            type=["jpg", "jpeg", "png", "webp"],
+            accept_multiple_files=False,
+            key="s6_model_upload",
+            help="上傳一張模特兒實穿照作為首圖主視覺；也可跳過，只使用商品去背圖",
+        )
+        if _s6_model_upload:
+            _s6_model_upload.seek(0)
+            _s6_selected_model_bytes = _s6_model_upload.read()
+            st.image(_s6_selected_model_bytes, caption="已上傳的主視覺照片", width=200)
 
     st.markdown("---")
 
@@ -2383,7 +2518,7 @@ Your task is to create an attractive e-commerce hero/listing image by compositin
                 st.code(traceback.format_exc(), language="text")
 
 # 顯示已生成的首圖
-if st.session_state.hero_banner_bytes:
+if show_step6 and st.session_state.hero_banner_bytes:
     st.markdown("### 🏷️ 電商首圖預覽")
     banner_img = Image.open(io.BytesIO(st.session_state.hero_banner_bytes))
     st.image(banner_img, caption="AI 生成的電商首圖", use_container_width=True)
@@ -2405,8 +2540,6 @@ if st.session_state.hero_banner_bytes:
     if st.button("🔄 重新生成", key="btn_hero_banner_retry"):
         st.session_state.hero_banner_bytes = None
         st.rerun()
-
-st.divider()
 
 # ─────────────────────────────────────────
 # Footer
