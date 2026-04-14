@@ -2590,7 +2590,7 @@ Your task is to create an attractive e-commerce hero/listing image by compositin
 if show_step6 and st.session_state.hero_banner_bytes:
     st.markdown("### 🏷️ 電商首圖預覽")
     banner_img = Image.open(io.BytesIO(st.session_state.hero_banner_bytes))
-    st.image(banner_img, caption="AI 生成的電商首圖", use_container_width=True)
+    st.image(banner_img, caption="AI 生成的電商首圖", width=500)
 
     col_bd1, col_bd2 = st.columns(2)
     with col_bd1:
