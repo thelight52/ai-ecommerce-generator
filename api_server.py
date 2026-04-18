@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from services.copy_service import generate_ig_copy
 from services.image_service import generate_product_image
+from services.scene_service import generate_scene_image
 from services.video_service import generate_product_video
 
 app = FastAPI(
@@ -51,6 +52,13 @@ class ImageRequest(BaseModel):
     style: Optional[str] = "電商主圖"
 
 
+class SceneRequest(BaseModel):
+    taskId: str
+    productImageBase64: str
+    scene: str
+    style: Optional[str] = None
+
+
 class VideoProductInfo(BaseModel):
     name: str
     description: str
@@ -70,7 +78,7 @@ def health():
         "status": "ok",
         "agent": "行銷設計部",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "capabilities": ["generate-copy", "generate-image", "generate-video"],
+        "capabilities": ["generate-copy", "generate-image", "generate-scene", "generate-video"],
     }
 
 
@@ -99,6 +107,20 @@ def route_generate_image(req: ImageRequest, _=Depends(_verify_key)):
             style=req.style or "電商主圖",
         )
         return {"taskId": req.taskId, "status": "done", "result": {"generatedImageUrl": image_url}}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/agent/generate-scene")
+def route_generate_scene(req: SceneRequest, _=Depends(_verify_key)):
+    """將商品平拍照合成到指定場景，回傳 base64 data URL。"""
+    try:
+        scene_url = generate_scene_image(
+            product_image_base64=req.productImageBase64,
+            scene=req.scene,
+            style=req.style,
+        )
+        return {"taskId": req.taskId, "status": "done", "result": {"sceneImageUrl": scene_url}}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
